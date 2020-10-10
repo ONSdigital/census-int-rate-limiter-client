@@ -1,2 +1,4 @@
-# census-int-rate-limiter-cllient
-Contains DTOs and client code for interfacing with the envoyProxy/rateLimiter
+# census-int-rate-limiter-client
+Census Integration team's library for calling the envoyproxy/ratelimier container aka abuse limiter
+
+
