@@ -18,9 +18,7 @@ public class RateLimiterClientTest {
 
   @Mock RestClient restClient;
 
-  @InjectMocks
-  RateLimiterClient rateLimiterClient =
-      new RateLimiterClient(restClient);
+  @InjectMocks RateLimiterClient rateLimiterClient = new RateLimiterClient(restClient);
 
   @Captor ArgumentCaptor<MultiValueMap<String, String>> queryParamsCaptor;
 
@@ -28,5 +26,4 @@ public class RateLimiterClientTest {
   public void initMocks() {
     MockitoAnnotations.initMocks(this);
   }
- 
 }
