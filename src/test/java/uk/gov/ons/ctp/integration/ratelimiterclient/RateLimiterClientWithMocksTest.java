@@ -1,4 +1,4 @@
-package uk.gov.ons.ctp.integration.caseapiclient.caseservice;
+package uk.gov.ons.ctp.integration.ratelimiterclient;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
@@ -14,7 +14,7 @@ import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient;
  * This class contains unit tests for the CaseServiceClientServiceImpl class. It mocks out the Rest
  * calls and returns dummy responses to represent what would be returned by the case service.
  */
-public class RateLimiterClientTest {
+public class RateLimiterClientWithMocksTest {
 
   @Mock RestClient restClient;
 
