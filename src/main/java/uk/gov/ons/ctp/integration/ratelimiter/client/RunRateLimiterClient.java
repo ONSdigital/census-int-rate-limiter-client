@@ -1,14 +1,11 @@
-package uk.gov.ons.ctp.integration.ratelimiterclient;
-
-import static org.junit.Assert.assertEquals;
+package uk.gov.ons.ctp.integration.ratelimiter.client;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.util.HashMap;
 import java.util.Map;
-import org.junit.Before;
-import org.junit.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -21,62 +18,49 @@ import uk.gov.ons.ctp.common.rest.RestClientConfig;
 import uk.gov.ons.ctp.integration.common.product.model.Product;
 import uk.gov.ons.ctp.integration.common.product.model.Product.DeliveryChannel;
 import uk.gov.ons.ctp.integration.common.product.model.Product.ProductGroup;
-import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
 
-public class RateLimiterClientTest {
-  private String limiterHost;
+public class RunRateLimiterClient {
 
   private RestClient restClient;
   private RateLimiterClient client;
 
   private ObjectMapper objectMapper;
 
-  @Before
-  public void setup() {
-
-    limiterHost = System.getenv("LIMITER_HOST");
-
-    if (limiterHost == null) {
-      System.out.println();
-      System.out.println(
-          "**********************************************************************************");
-      System.out.println(
-          "*** NOT running test. No limiter host set in environment variable LIMITER_HOST ***");
-      System.out.println(
-          "**********************************************************************************");
-      System.out.println();
-    } else {
-      System.out.println("Running test against limiter at: " + limiterHost);
-      System.out.println();
-
-      this.objectMapper = new ObjectMapper();
-      objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
-
-      // Create RestClient to call limiter
-      RestClientConfig restClientConfig = new RestClientConfig("http", limiterHost, "8181", "", "");
-      Map<HttpStatus, HttpStatus> httpErrorMapping = new HashMap<>();
-      httpErrorMapping.put(HttpStatus.TOO_MANY_REQUESTS, HttpStatus.TOO_MANY_REQUESTS);
-      this.restClient =
-          new RestClient(restClientConfig, httpErrorMapping, HttpStatus.INTERNAL_SERVER_ERROR);
-
-      this.client = new RateLimiterClient(this.restClient);
+  public static void main(String[] args)
+      throws JsonMappingException, JsonProcessingException, CTPException {
+    String limiterHost = "localhost";
+    if (args.length >= 1) {
+      limiterHost = args[0];
     }
+    System.out.println("Running test against limiter at: " + limiterHost);
+    System.out.println();
+
+    new RunRateLimiterClient(limiterHost).runTest();
+
+    System.out.println("\n** Test completed without error **");
   }
 
-  @Test
-  public void runTest() throws JsonProcessingException, CTPException {
-    if (limiterHost == null) {
-      return;
-    }
+  public RunRateLimiterClient(String limiterHost) {
+    this.objectMapper = new ObjectMapper();
+    objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
 
+    // Create RestClient to call limiter
+    RestClientConfig restClientConfig = new RestClientConfig("http", limiterHost, "8181", "", "");
+    Map<HttpStatus, HttpStatus> httpErrorMapping = new HashMap<>();
+    httpErrorMapping.put(HttpStatus.TOO_MANY_REQUESTS, HttpStatus.TOO_MANY_REQUESTS);
+    this.restClient =
+        new RestClient(restClientConfig, httpErrorMapping, HttpStatus.INTERNAL_SERVER_ERROR);
+
+    this.client = new RateLimiterClient(this.restClient);
+  }
+
+  public void runTest() throws JsonProcessingException, CTPException {
     invokeLimitEndpoint("1) /limit?enabled=false", false);
     invokeJsonEndpoint("2) /json", HttpStatus.OK);
 
     invokeLimitEndpoint("3) /limit?enabled=true", true);
     invokeJsonEndpoint("4) /json", HttpStatus.TOO_MANY_REQUESTS);
-
-    System.out.println("\n** Test completed without error **");
   }
 
   private void invokeLimitEndpoint(String narrative, boolean tooManyRequests) {
@@ -130,7 +114,11 @@ public class RateLimiterClientTest {
       System.out.println("InvokeJsonEndpoint: Caught exception: " + actualHttpStatus);
     }
 
-    assertEquals(expectedHttpStatus, actualHttpStatus);
+    if (expectedHttpStatus != actualHttpStatus) {
+      System.out.println(
+          "FAILED: expected: " + expectedHttpStatus + " but actual: " + actualHttpStatus);
+      System.exit(-1);
+    }
     System.out.println();
   }
 
