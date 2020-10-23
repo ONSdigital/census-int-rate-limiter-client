@@ -24,6 +24,13 @@ import uk.gov.ons.ctp.integration.common.product.model.Product.ProductGroup;
 import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
 
+/**
+ * This is a program for manually testing the client against an real/fake limiter.
+ *
+ * <p>The hostname of the limiter should be set in the LIMITER_HOST environment variable. If this
+ * environment variable is not set then the program doesn't do anything (and will therefore 'pass'
+ * the test)
+ */
 public class RateLimiterClientTest {
   private String limiterHost;
 
@@ -125,9 +132,12 @@ public class RateLimiterClientTest {
       System.out.println("Response:");
       System.out.println(convertToJson(response));
       actualHttpStatus = HttpStatus.valueOf(Integer.parseInt(response.getOverallCode()));
+
     } catch (ResponseStatusException e) {
       actualHttpStatus = e.getStatus();
       System.out.println("InvokeJsonEndpoint: Caught exception: " + actualHttpStatus);
+      System.out.println("Response:");
+      System.out.println(e.getReason());
     }
 
     assertEquals(expectedHttpStatus, actualHttpStatus);

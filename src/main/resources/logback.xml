@@ -93,7 +93,7 @@
     </filter>
   </appender>
 
-  <root level="WARN">
+  <root level="INFO">
     <appender-ref ref="${profile}" />
     <appender-ref ref="SYSLOG" />
   </root>
