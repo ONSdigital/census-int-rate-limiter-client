@@ -27,14 +27,14 @@ public class RateLimiterClient {
   // Enum with domains known to limiter
   public enum Domain {
     RHSvc("respondenthome");
-    
+
     private String domainName;
-    
+
     private Domain(String domainName) {
       this.domainName = domainName;
     }
   }
-  
+
   // Names of descriptor entries for limiter request
   private static final String KEY_PRODUCT_GROUP = "productGroup";
   private static final String KEY_INDIVIDUAL = "individual";
@@ -45,10 +45,9 @@ public class RateLimiterClient {
   private static final String KEY_TEL_NO = "telNo";
 
   private static final String RATE_LIMITER_QUERY_PATH = "/json";
-  
+
   private RestClient rateLimiterClient;
   private ObjectMapper objectMapper = new ObjectMapper();
-
 
   public RateLimiterClient(RestClient rateLimiterClient) {
     super();
@@ -60,21 +59,21 @@ public class RateLimiterClient {
 
   /**
    * Send limit request to the limiter.
-   * 
-   * If no limit has been breached then this method returns. If there is an internal error 
-   * or if a limit is breached then an exception is thrown.
-   * 
+   *
+   * <p>If no limit has been breached then this method returns. If there is an internal error or if
+   * a limit is breached then an exception is thrown.
+   *
    * @param domain is the domain to query against.
-   * @param product is the product used by the caller. 
+   * @param product is the product used by the caller.
    * @param caseType is the case type for the current request.
    * @param ipAddress is the end users ip address.
    * @param uprn is the uprn to limit requests against.
    * @param telNo is the end users telephone number. This argument may be null.
    * @return The response from the rate limiter.
    * @throws CTPException if there is a processing error.
-   * @throws ResponseStatusException if the request to the limiter didn't return a 200. 
-   * If a limit has been breached then the exception status will be HttpStatus.TOO_MANY_REQUESTS and the exception's reason field 
-   * will contain the limiters json response. 
+   * @throws ResponseStatusException if the request to the limiter didn't return a 200. If a limit
+   *     has been breached then the exception status will be HttpStatus.TOO_MANY_REQUESTS and the
+   *     exception's reason field will contain the limiters json response.
    */
   public RateLimitResponse checkRateLimit(
       Domain domain,
@@ -97,15 +96,6 @@ public class RateLimiterClient {
     // Create request
     RateLimitRequest request =
         createRateLimitRequest(domain, product, caseType, ipAddress, uprn, telNo);
-
-    // Debug logging of request json
-    if (log.isDebugEnabled()) {
-      try {
-        log.debug("Limiter request as Json: \n" + objectMapper.writeValueAsString(request));
-      } catch (JsonProcessingException ex) {
-        log.info("Failed to convert request to json: " + ex.getMessage());
-      }
-    }
 
     // Send request to limiter, with detailed logging if we breached a limit
     RateLimitResponse response;
