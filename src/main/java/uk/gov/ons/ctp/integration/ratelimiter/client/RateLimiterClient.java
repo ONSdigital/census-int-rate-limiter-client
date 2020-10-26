@@ -212,6 +212,10 @@ public class RateLimiterClient {
   }
 
   private String redactTelephoneNumber(String telNo) {
+    if (telNo == null) {
+      return "null";
+    }
+
     StringBuilder redactedTelephoneNumber = new StringBuilder();
 
     redactedTelephoneNumber.append("xxxx");
