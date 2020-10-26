@@ -31,7 +31,7 @@ import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
  * environment variable is not set then the program doesn't do anything (and will therefore 'pass'
  * the test)
  */
-public class RateLimiterClientTest {
+public class RateLimiterClientIntegrationTest {
   private String limiterHost;
 
   private RestClient restClient;
