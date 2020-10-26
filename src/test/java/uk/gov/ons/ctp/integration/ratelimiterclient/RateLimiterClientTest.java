@@ -55,7 +55,7 @@ public class RateLimiterClientTest {
           null,
           null);
 
-  private Domain domain = RateLimiterClient.Domain.RHSvc;
+  private Domain domain = RateLimiterClient.Domain.RH;
   private UniquePropertyReferenceNumber uprn = new UniquePropertyReferenceNumber("24234234");
   private CaseType caseType = CaseType.HH;
   private String ipAddress = "123.123.123.123";

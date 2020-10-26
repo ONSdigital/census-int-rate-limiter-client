@@ -123,7 +123,7 @@ public class RateLimiterClientIntegrationTest {
       // Get client to call /json endpoint
       RateLimitResponse response =
           client.checkRateLimit(
-              RateLimiterClient.Domain.RHSvc,
+              RateLimiterClient.Domain.RH,
               product,
               CaseType.HH,
               "1.23.34.45",

@@ -26,7 +26,7 @@ public class RateLimiterClient {
 
   // Enum with domains known to limiter
   public enum Domain {
-    RHSvc("respondenthome");
+    RH("respondenthome");
 
     private String domainName;
 
