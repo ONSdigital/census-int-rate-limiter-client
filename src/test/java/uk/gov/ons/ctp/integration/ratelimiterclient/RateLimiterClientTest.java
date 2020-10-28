@@ -1,5 +1,6 @@
 package uk.gov.ons.ctp.integration.ratelimiterclient;
 
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,6 +64,18 @@ public class RateLimiterClientTest {
   @Before
   public void initMocks() {
     MockitoAnnotations.initMocks(this);
+  }
+
+  @Test
+  public void checkRateLimit_nullDomain() {
+    CTPException exception =
+        assertThrows(
+            CTPException.class,
+            () -> {
+              rateLimiterClient.checkRateLimit(
+                  null, product, caseType, ipAddress, uprn, "0171 3434");
+            });
+    assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
   }
 
   @Test
@@ -140,6 +153,74 @@ public class RateLimiterClientTest {
       assertTrue(e.getMessage().contains("Failed to parse"));
       assertEquals(Fault.SYSTEM_ERROR, e.getFault());
     }
+  }
+
+  @Test
+  public void checkRateLimit_nullProduct() {
+    CTPException exception =
+        assertThrows(
+            CTPException.class,
+            () -> {
+              rateLimiterClient.checkRateLimit(
+                  domain, null, caseType, ipAddress, uprn, "0171 3434");
+            });
+    assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
+  }
+
+  @Test
+  public void checkRateLimit_nullCaseType() {
+    CTPException exception =
+        assertThrows(
+            CTPException.class,
+            () -> {
+              rateLimiterClient.checkRateLimit(domain, product, null, ipAddress, uprn, "0171 3434");
+            });
+    assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
+  }
+
+  @Test
+  public void checkRateLimit_nullIpAddress() {
+    CTPException exception =
+        assertThrows(
+            CTPException.class,
+            () -> {
+              rateLimiterClient.checkRateLimit(domain, product, caseType, null, uprn, "0171 3434");
+            });
+    assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
+  }
+
+  @Test
+  public void checkRateLimit_blankIpAddress() {
+    CTPException exception =
+        assertThrows(
+            CTPException.class,
+            () -> {
+              rateLimiterClient.checkRateLimit(domain, product, caseType, " ", uprn, "0171 3434");
+            });
+    assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be blank"));
+  }
+
+  @Test
+  public void checkRateLimit_nullUprn() {
+    CTPException exception =
+        assertThrows(
+            CTPException.class,
+            () -> {
+              rateLimiterClient.checkRateLimit(
+                  domain, product, caseType, ipAddress, null, "0171 3434");
+            });
+    assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
+  }
+
+  @Test
+  public void checkRateLimit_blankIpTelNo() {
+    CTPException exception =
+        assertThrows(
+            CTPException.class,
+            () -> {
+              rateLimiterClient.checkRateLimit(domain, product, caseType, ipAddress, uprn, "");
+            });
+    assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be blank"));
   }
 
   private void doCheckRateLimit_belowThreshold(boolean useTelNo) throws CTPException {
