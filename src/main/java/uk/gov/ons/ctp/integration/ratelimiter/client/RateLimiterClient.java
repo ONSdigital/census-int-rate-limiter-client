@@ -63,14 +63,18 @@ public class RateLimiterClient {
    * <p>If no limit has been breached then this method returns. If there is an internal error or if
    * a limit is breached then an exception is thrown.
    *
+   * <p>All arguments must be non null and not empty, with the exception of the phone number which
+   * can be null if not known.
+   *
    * @param domain is the domain to query against.
    * @param product is the product used by the caller.
    * @param caseType is the case type for the current request.
    * @param ipAddress is the end users ip address.
    * @param uprn is the uprn to limit requests against.
-   * @param telNo is the end users telephone number. This argument may be null.
+   * @param telNo is the end users telephone number, which must be either null or where appropriate
+   *     not empty.
    * @return The response from the rate limiter.
-   * @throws CTPException if there is a processing error.
+   * @throws CTPException if there is a processing error or if an invalid argument is supplied.
    * @throws ResponseStatusException if the request to the limiter didn't return a 200. If a limit
    *     has been breached then the exception status will be HttpStatus.TOO_MANY_REQUESTS and the
    *     exception's reason field will contain the limiters json response.
@@ -82,7 +86,17 @@ public class RateLimiterClient {
       String ipAddress,
       UniquePropertyReferenceNumber uprn,
       String telNo)
-      throws CTPException {
+      throws CTPException, ResponseStatusException {
+
+    // Fail if caller doesn't meet interface requirements
+    verifyArgumentSupplied("domain", domain);
+    verifyArgumentSupplied("product", product);
+    verifyArgumentSupplied("caseType", caseType);
+    verifyArgumentSupplied("ipAddress", ipAddress);
+    verifyArgumentNotEmpty("ipAddress", ipAddress);
+    verifyArgumentSupplied("uprn", uprn);
+    verifyArgumentNotEmpty("telNo", telNo);
+
     log.with("domain", domain.domainName)
         .with("productGroup", product.getProductGroup().name())
         .with("individual", product.getIndividual().toString())
@@ -96,6 +110,7 @@ public class RateLimiterClient {
     // Create request
     RateLimitRequest request =
         createRateLimitRequest(domain, product, caseType, ipAddress, uprn, telNo);
+    log.with(request).debug("RateLimiterRequest");
 
     // Send request to limiter, with detailed logging if we breached a limit
     RateLimitResponse response;
@@ -132,6 +147,19 @@ public class RateLimiterClient {
     }
 
     return response;
+  }
+
+  private void verifyArgumentSupplied(String argName, Object argValue) throws CTPException {
+    if (argValue == null) {
+      throw new CTPException(Fault.SYSTEM_ERROR, "Argument '" + argName + "' cannot be null");
+    }
+  }
+
+  private void verifyArgumentNotEmpty(String argName, String argValue) throws CTPException {
+    if (argValue != null && argValue.isBlank()) {
+      throw new CTPException(
+          Fault.SYSTEM_ERROR, "Argument '" + argName + "' cannot be blank (" + argValue + ")");
+    }
   }
 
   private RateLimitRequest createRateLimitRequest(
