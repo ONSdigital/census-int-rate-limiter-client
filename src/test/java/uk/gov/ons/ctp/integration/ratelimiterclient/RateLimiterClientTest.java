@@ -8,13 +8,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.ons.ctp.common.FixtureHelper;
@@ -37,6 +37,7 @@ import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
  * This class contains unit tests for the CaseServiceClientServiceImpl class. It mocks out the Rest
  * calls and returns dummy responses to represent what would be returned by the case service.
  */
+@RunWith(MockitoJUnitRunner.class)
 public class RateLimiterClientTest {
 
   @Mock RestClient restClient;
@@ -60,11 +61,6 @@ public class RateLimiterClientTest {
   private UniquePropertyReferenceNumber uprn = new UniquePropertyReferenceNumber("24234234");
   private CaseType caseType = CaseType.HH;
   private String ipAddress = "123.123.123.123";
-
-  @Before
-  public void initMocks() {
-    MockitoAnnotations.initMocks(this);
-  }
 
   @Test
   public void checkRateLimit_nullDomain() {
