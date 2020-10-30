@@ -141,7 +141,11 @@ public class RateLimiterClient {
         throw new CTPException(
             Fault.SYSTEM_ERROR,
             limiterException,
-            "Failed to parse rate limiter exception response");
+            "POST request to limiter failed with http status: "
+                + httpStatus.value()
+                + "("
+                + httpStatus.name()
+                + ")");
       }
       throw limiterException;
     }
