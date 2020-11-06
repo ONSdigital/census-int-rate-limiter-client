@@ -1,14 +1,15 @@
 package uk.gov.ons.ctp.integration.ratelimiter.client;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.godaddy.logging.Logger;
 import com.godaddy.logging.LoggerFactory;
-import java.util.ArrayList;
-import java.util.List;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 import uk.gov.ons.ctp.common.domain.CaseType;
 import uk.gov.ons.ctp.common.domain.UniquePropertyReferenceNumber;
 import uk.gov.ons.ctp.common.error.CTPException;
@@ -44,6 +45,16 @@ public class RateLimiterClient {
   private static final String KEY_UPRN = "uprn";
   private static final String KEY_TEL_NO = "telNo";
 
+  private static String[] L1 = {
+    KEY_PRODUCT_GROUP, KEY_INDIVIDUAL, KEY_DELIVERY_CHANNEL, KEY_CASE_TYPE, KEY_IP_ADDRESS
+  };
+  private static String[] L2 = {
+    KEY_PRODUCT_GROUP, KEY_INDIVIDUAL, KEY_DELIVERY_CHANNEL, KEY_CASE_TYPE, KEY_UPRN
+  };
+  private static String[] L3 = {
+    KEY_PRODUCT_GROUP, KEY_INDIVIDUAL, KEY_DELIVERY_CHANNEL, KEY_CASE_TYPE, KEY_TEL_NO
+  };
+
   private static final String RATE_LIMITER_QUERY_PATH = "/json";
 
   private RestClient rateLimiterClient;
@@ -66,13 +77,14 @@ public class RateLimiterClient {
    * <p>All arguments must be non null and not empty, with the exception of the phone number which
    * can be null if not known.
    *
-   * @param domain is the domain to query against.
-   * @param product is the product used by the caller.
-   * @param caseType is the case type for the current request.
-   * @param ipAddress is the end users ip address.
-   * @param uprn is the uprn to limit requests against.
-   * @param telNo is the end users telephone number, which must be either null or where appropriate
-   *     not empty.
+   * @param domain is the domain to query against. This value is mandatory.
+   * @param product is the product used by the caller. This value is mandatory.
+   * @param caseType is the case type for the current request. This value is mandatory.
+   * @param ipAddress is the end users ip address. This value can be null, but if supplied then it
+   *     cannot be an empty string.
+   * @param uprn is the uprn to limit requests against. This value is mandatory.
+   * @param telNo is the end users telephone number. This value can be null, but if supplied then it
+   *     cannot be an empty string.
    * @return The response from the rate limiter.
    * @throws CTPException if there is a processing error or if an invalid argument is supplied.
    * @throws ResponseStatusException if the request to the limiter didn't return a 200. If a limit
@@ -106,7 +118,16 @@ public class RateLimiterClient {
         .with("uprn", uprn.getValue())
         .with("telNo", redactTelephoneNumber(telNo))
         .info("Going to call Rate Limiter Service");
-
+    
+    HashMap<String, String> params = new HashMap<String, String>();
+    params.put(KEY_PRODUCT_GROUP, product.getProductGroup().name());
+    params.put(KEY_INDIVIDUAL, product.getIndividual().toString());
+    params.put(KEY_DELIVERY_CHANNEL, product.getDeliveryChannel().name());
+    params.put(KEY_CASE_TYPE, caseType.name());
+    params.put(KEY_IP_ADDRESS, ipAddress);
+    params.put(KEY_UPRN, Long.toString(uprn.getValue()));
+    params.put(KEY_TEL_NO, telNo);
+    
     // Create request
     RateLimitRequest request =
         createRateLimitRequest(domain, product, caseType, ipAddress, uprn, telNo);
@@ -174,7 +195,7 @@ public class RateLimiterClient {
       UniquePropertyReferenceNumber uprn,
       String telNo) {
     List<LimitDescriptor> descriptors = new ArrayList<>();
-    descriptors.add(createLimitDescriptor(product, caseType, KEY_IP_ADDRESS, ipAddress));
+    descriptors.add( --- createLimitDescriptor(product, caseType, KEY_IP_ADDRESS, ipAddress));
     descriptors.add(
         createLimitDescriptor(product, caseType, KEY_UPRN, Long.toString(uprn.getValue())));
     if (telNo != null) {
