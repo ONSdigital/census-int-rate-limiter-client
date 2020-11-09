@@ -45,6 +45,7 @@ public class RateLimiterClient {
   private static final String DESC_UPRN = "uprn";
   private static final String DESC_TEL_NO = "telNo";
 
+  // Lists of descriptors to be sent to the limiter
   private static String[] DESCRIPTORS_WITH_UPRN = {
     DESC_DELIVERY_CHANNEL, DESC_PRODUCT_GROUP, DESC_INDIVIDUAL, DESC_CASE_TYPE, DESC_UPRN
   };
