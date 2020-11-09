@@ -196,19 +196,16 @@ public class RateLimiterClient {
   private RateLimitRequest createRateLimitRequest(
       Domain domain, HashMap<String, String> descriptorData) {
 
-    boolean haveTelNo = descriptorData.get(DESC_TEL_NO) != null;
-    boolean haveIpAddress = descriptorData.get(DESC_IP_ADDRESS) != null;
-
     List<LimitDescriptor> descriptors = new ArrayList<>();
     descriptors.add(createLimitDescriptor(DESCRIPTORS_WITH_UPRN, descriptorData));
-    if (haveTelNo) {
+    if (descriptorData.get(DESC_TEL_NO) != null) {
       descriptors.add(createLimitDescriptor(DESCRIPTORS_WITH_TEL_NO, descriptorData));
     }
     descriptors.add(createLimitDescriptor(DELIVERYCHANNEL_WITH_ONLY_UPRN, descriptorData));
-    if (haveTelNo) {
+    if (descriptorData.get(DESC_TEL_NO) != null) {
       descriptors.add(createLimitDescriptor(DELIVERYCHANNEL_WITH_ONLY_TEL_NO, descriptorData));
     }
-    if (haveIpAddress) {
+    if (descriptorData.get(DESC_IP_ADDRESS) != null) {
       descriptors.add(createLimitDescriptor(DELIVERYCHANNEL_WITH_ONLY_IP_ADDRESS, descriptorData));
     }
 
