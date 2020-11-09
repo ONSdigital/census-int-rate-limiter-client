@@ -108,7 +108,8 @@ public class RateLimiterClientTest {
 
     // Confirm that limiter request fails with a 429 exception
     try {
-      rateLimiterClient.checkRateLimit(domain, product, caseType, "123.111.222.23", uprn, "0171 3434");
+      rateLimiterClient.checkRateLimit(
+          domain, product, caseType, "123.111.222.23", uprn, "0171 3434");
       fail();
     } catch (ResponseStatusException e) {
       assertEquals(failureException, e);
@@ -166,8 +167,7 @@ public class RateLimiterClientTest {
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkRateLimit(
-                  domain, null, caseType, null, uprn, "0171 3434");
+              rateLimiterClient.checkRateLimit(domain, null, caseType, null, uprn, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
   }
@@ -200,8 +200,7 @@ public class RateLimiterClientTest {
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkRateLimit(
-                  domain, product, caseType, null, null, "0171 3434");
+              rateLimiterClient.checkRateLimit(domain, product, caseType, null, null, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
   }
@@ -217,7 +216,8 @@ public class RateLimiterClientTest {
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be blank"));
   }
 
-  private void doCheckRateLimit_belowThreshold(boolean useTelNo, boolean useIpAddress) throws CTPException {
+  private void doCheckRateLimit_belowThreshold(boolean useTelNo, boolean useIpAddress)
+      throws CTPException {
 
     RateLimitResponse fakeResponse = new RateLimitResponse();
     Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class), eq("")))
@@ -241,8 +241,9 @@ public class RateLimiterClientTest {
     expectedNumDescriptors += useIpAddress ? 1 : 0;
     assertEquals(expectedNumDescriptors, request.getDescriptors().size());
 
-    // Verify that the limit request is correct, for whatever combination of mandatory and optional data we are currently testing
-    int i=0;
+    // Verify that the limit request is correct, for whatever combination of mandatory and
+    // optional data we are currently testing
+    int i = 0;
     verifyDescriptor(request, i++, product, caseType, "uprn", Long.toString(uprn.getValue()));
     if (useTelNo) {
       verifyDescriptor(request, i++, product, caseType, "telNo", telNo);

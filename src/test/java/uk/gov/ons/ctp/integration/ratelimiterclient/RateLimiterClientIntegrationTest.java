@@ -103,7 +103,8 @@ public class RateLimiterClientIntegrationTest {
     System.out.println();
   }
 
-  private void invokeJsonEndpoint(String narrative, boolean useTelNo, boolean useIP, HttpStatus expectedHttpStatus)
+  private void invokeJsonEndpoint(
+      String narrative, boolean useTelNo, boolean useIP, HttpStatus expectedHttpStatus)
       throws JsonProcessingException, CTPException {
     System.out.println(narrative);
     System.out.println("Expecting: " + expectedHttpStatus.name());
@@ -125,7 +126,7 @@ public class RateLimiterClientIntegrationTest {
     try {
       String ipAddress = useIP ? "1.23.34.45" : null;
       String telNo = useTelNo ? "0123 3434333" : null;
-      
+
       // Get client to call /json endpoint
       RateLimitResponse response =
           client.checkRateLimit(
