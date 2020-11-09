@@ -78,10 +78,13 @@ public class RateLimiterClientIntegrationTest {
     }
 
     invokeLimitEndpoint("1) /limit?enabled=false", false);
-    invokeJsonEndpoint("2) /json", HttpStatus.OK);
+    invokeJsonEndpoint("2) no telNo or IP /json", false, false, HttpStatus.OK);
+    invokeJsonEndpoint("3) no telNo but with IP /json", false, true, HttpStatus.OK);
+    invokeJsonEndpoint("4) telNo but no IP /json", true, false, HttpStatus.OK);
+    invokeJsonEndpoint("5) telNo and IP /json", true, true, HttpStatus.OK);
 
-    invokeLimitEndpoint("3) /limit?enabled=true", true);
-    invokeJsonEndpoint("4) /json", HttpStatus.TOO_MANY_REQUESTS);
+    invokeLimitEndpoint("6) /limit?enabled=true", true);
+    invokeJsonEndpoint("7) /json", false, false, HttpStatus.TOO_MANY_REQUESTS);
 
     System.out.println("\n** Test completed without error **");
   }
@@ -100,7 +103,7 @@ public class RateLimiterClientIntegrationTest {
     System.out.println();
   }
 
-  private void invokeJsonEndpoint(String narrative, HttpStatus expectedHttpStatus)
+  private void invokeJsonEndpoint(String narrative, boolean useTelNo, boolean useIP, HttpStatus expectedHttpStatus)
       throws JsonProcessingException, CTPException {
     System.out.println(narrative);
     System.out.println("Expecting: " + expectedHttpStatus.name());
@@ -120,15 +123,18 @@ public class RateLimiterClientIntegrationTest {
 
     HttpStatus actualHttpStatus;
     try {
+      String ipAddress = useIP ? "1.23.34.45" : null;
+      String telNo = useTelNo ? "0123 3434333" : null;
+      
       // Get client to call /json endpoint
       RateLimitResponse response =
           client.checkRateLimit(
               RateLimiterClient.Domain.RH,
               product,
               CaseType.HH,
-              "1.23.34.45",
+              ipAddress,
               new UniquePropertyReferenceNumber("24234234"),
-              "0123 3434333");
+              telNo);
       System.out.println("Response:");
       System.out.println(convertToJson(response));
       actualHttpStatus = HttpStatus.valueOf(Integer.parseInt(response.getOverallCode()));
