@@ -1,15 +1,15 @@
 package uk.gov.ons.ctp.integration.ratelimiter.client;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.godaddy.logging.Logger;
 import com.godaddy.logging.LoggerFactory;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import uk.gov.ons.ctp.common.domain.CaseType;
 import uk.gov.ons.ctp.common.domain.UniquePropertyReferenceNumber;
 import uk.gov.ons.ctp.common.error.CTPException;
@@ -37,22 +37,24 @@ public class RateLimiterClient {
   }
 
   // Names of descriptor entries for limiter request
-  private static final String KEY_PRODUCT_GROUP = "productGroup";
-  private static final String KEY_INDIVIDUAL = "individual";
-  private static final String KEY_DELIVERY_CHANNEL = "deliveryChannel";
-  private static final String KEY_CASE_TYPE = "caseType";
-  private static final String KEY_IP_ADDRESS = "ipAddress";
-  private static final String KEY_UPRN = "uprn";
-  private static final String KEY_TEL_NO = "telNo";
+  private static final String DESC_PRODUCT_GROUP = "productGroup";
+  private static final String DESC_INDIVIDUAL = "individual";
+  private static final String DESC_DELIVERY_CHANNEL = "deliveryChannel";
+  private static final String DESC_CASE_TYPE = "caseType";
+  private static final String DESC_IP_ADDRESS = "ipAddress";
+  private static final String DESC_UPRN = "uprn";
+  private static final String DESC_TEL_NO = "telNo";
 
-  private static String[] L1 = {
-    KEY_PRODUCT_GROUP, KEY_INDIVIDUAL, KEY_DELIVERY_CHANNEL, KEY_CASE_TYPE, KEY_IP_ADDRESS
+  private static String[] DESCRIPTORS_WITH_UPRN = {
+    DESC_DELIVERY_CHANNEL, DESC_PRODUCT_GROUP, DESC_INDIVIDUAL, DESC_CASE_TYPE, DESC_UPRN
   };
-  private static String[] L2 = {
-    KEY_PRODUCT_GROUP, KEY_INDIVIDUAL, KEY_DELIVERY_CHANNEL, KEY_CASE_TYPE, KEY_UPRN
+  private static String[] DESCRIPTORS_WITH_TEL_NO = {
+    DESC_DELIVERY_CHANNEL, DESC_PRODUCT_GROUP, DESC_INDIVIDUAL, DESC_CASE_TYPE, DESC_TEL_NO
   };
-  private static String[] L3 = {
-    KEY_PRODUCT_GROUP, KEY_INDIVIDUAL, KEY_DELIVERY_CHANNEL, KEY_CASE_TYPE, KEY_TEL_NO
+  private static String[] DELIVERYCHANNEL_WITH_ONLY_UPRN = {DESC_DELIVERY_CHANNEL, DESC_UPRN};
+  private static String[] DELIVERYCHANNEL_WITH_ONLY_TEL_NO = {DESC_DELIVERY_CHANNEL, DESC_TEL_NO};
+  private static String[] DELIVERYCHANNEL_WITH_ONLY_IP_ADDRESS = {
+    DESC_DELIVERY_CHANNEL, DESC_IP_ADDRESS
   };
 
   private static final String RATE_LIMITER_QUERY_PATH = "/json";
@@ -104,7 +106,6 @@ public class RateLimiterClient {
     verifyArgumentSupplied("domain", domain);
     verifyArgumentSupplied("product", product);
     verifyArgumentSupplied("caseType", caseType);
-    verifyArgumentSupplied("ipAddress", ipAddress);
     verifyArgumentNotEmpty("ipAddress", ipAddress);
     verifyArgumentSupplied("uprn", uprn);
     verifyArgumentNotEmpty("telNo", telNo);
@@ -118,19 +119,19 @@ public class RateLimiterClient {
         .with("uprn", uprn.getValue())
         .with("telNo", redactTelephoneNumber(telNo))
         .info("Going to call Rate Limiter Service");
-    
+
+    // Make it easy to access limiter parameters by adding to a hashmap
     HashMap<String, String> params = new HashMap<String, String>();
-    params.put(KEY_PRODUCT_GROUP, product.getProductGroup().name());
-    params.put(KEY_INDIVIDUAL, product.getIndividual().toString());
-    params.put(KEY_DELIVERY_CHANNEL, product.getDeliveryChannel().name());
-    params.put(KEY_CASE_TYPE, caseType.name());
-    params.put(KEY_IP_ADDRESS, ipAddress);
-    params.put(KEY_UPRN, Long.toString(uprn.getValue()));
-    params.put(KEY_TEL_NO, telNo);
-    
+    params.put(DESC_PRODUCT_GROUP, product.getProductGroup().name());
+    params.put(DESC_INDIVIDUAL, product.getIndividual().toString());
+    params.put(DESC_DELIVERY_CHANNEL, product.getDeliveryChannel().name());
+    params.put(DESC_CASE_TYPE, caseType.name());
+    params.put(DESC_IP_ADDRESS, ipAddress);
+    params.put(DESC_UPRN, Long.toString(uprn.getValue()));
+    params.put(DESC_TEL_NO, telNo);
+
     // Create request
-    RateLimitRequest request =
-        createRateLimitRequest(domain, product, caseType, ipAddress, uprn, telNo);
+    RateLimitRequest request = createRateLimitRequest(domain, params);
     log.with(request).debug("RateLimiterRequest");
 
     // Send request to limiter, with detailed logging if we breached a limit
@@ -174,12 +175,14 @@ public class RateLimiterClient {
     return response;
   }
 
+  // Throws CTPException is the argument is null
   private void verifyArgumentSupplied(String argName, Object argValue) throws CTPException {
     if (argValue == null) {
       throw new CTPException(Fault.SYSTEM_ERROR, "Argument '" + argName + "' cannot be null");
     }
   }
 
+  // Throws CTPException if an argument is supplied but it is blank
   private void verifyArgumentNotEmpty(String argName, String argValue) throws CTPException {
     if (argValue != null && argValue.isBlank()) {
       throw new CTPException(
@@ -187,19 +190,25 @@ public class RateLimiterClient {
     }
   }
 
+  // This is a key method that bunches together the various arguments that the limiter will be using
+  // to decide if the request has breached any limits.
   private RateLimitRequest createRateLimitRequest(
-      Domain domain,
-      Product product,
-      CaseType caseType,
-      String ipAddress,
-      UniquePropertyReferenceNumber uprn,
-      String telNo) {
+      Domain domain, HashMap<String, String> descriptorData) {
+
+    boolean haveTelNo = descriptorData.get(DESC_TEL_NO) != null;
+    boolean haveIpAddress = descriptorData.get(DESC_IP_ADDRESS) != null;
+
     List<LimitDescriptor> descriptors = new ArrayList<>();
-    descriptors.add( --- createLimitDescriptor(product, caseType, KEY_IP_ADDRESS, ipAddress));
-    descriptors.add(
-        createLimitDescriptor(product, caseType, KEY_UPRN, Long.toString(uprn.getValue())));
-    if (telNo != null) {
-      descriptors.add(createLimitDescriptor(product, caseType, KEY_TEL_NO, telNo));
+    descriptors.add(createLimitDescriptor(DESCRIPTORS_WITH_UPRN, descriptorData));
+    if (haveTelNo) {
+      descriptors.add(createLimitDescriptor(DESCRIPTORS_WITH_TEL_NO, descriptorData));
+    }
+    descriptors.add(createLimitDescriptor(DELIVERYCHANNEL_WITH_ONLY_UPRN, descriptorData));
+    if (haveTelNo) {
+      descriptors.add(createLimitDescriptor(DELIVERYCHANNEL_WITH_ONLY_TEL_NO, descriptorData));
+    }
+    if (haveIpAddress) {
+      descriptors.add(createLimitDescriptor(DELIVERYCHANNEL_WITH_ONLY_IP_ADDRESS, descriptorData));
     }
 
     RateLimitRequest request =
@@ -208,13 +217,13 @@ public class RateLimiterClient {
   }
 
   private LimitDescriptor createLimitDescriptor(
-      Product product, CaseType caseType, String customEntryName, String customEntryValue) {
+      String[] descriptorList, HashMap<String, String> descriptorData) {
+
     List<DescriptorEntry> entries = new ArrayList<>();
-    entries.add(new DescriptorEntry(KEY_PRODUCT_GROUP, product.getProductGroup().name()));
-    entries.add(new DescriptorEntry(KEY_INDIVIDUAL, product.getIndividual().toString()));
-    entries.add(new DescriptorEntry(KEY_DELIVERY_CHANNEL, product.getDeliveryChannel().name()));
-    entries.add(new DescriptorEntry(KEY_CASE_TYPE, caseType.name()));
-    entries.add(new DescriptorEntry(customEntryName, customEntryValue));
+    for (String descriptorName : descriptorList) {
+      String descriptorValue = descriptorData.get(descriptorName);
+      entries.add(new DescriptorEntry(descriptorName, descriptorValue));
+    }
 
     LimitDescriptor limitDescriptor = new LimitDescriptor();
     limitDescriptor.setEntries(entries);
@@ -239,7 +248,7 @@ public class RateLimiterClient {
 
       String descriptorKey = descriptorEntry.getKey();
       String descriptorValue = descriptorEntry.getValue();
-      if (descriptorKey.equals(KEY_TEL_NO)) {
+      if (descriptorKey.equals(DESC_TEL_NO)) {
         descriptorValue = redactTelephoneNumber(descriptorValue);
       }
 
