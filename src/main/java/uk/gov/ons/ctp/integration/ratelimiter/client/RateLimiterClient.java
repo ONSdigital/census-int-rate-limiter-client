@@ -8,6 +8,7 @@ import com.godaddy.logging.LoggerFactory;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.ons.ctp.common.domain.CaseType;
@@ -122,7 +123,7 @@ public class RateLimiterClient {
         .info("Going to call Rate Limiter Service");
 
     // Make it easy to access limiter parameters by adding to a hashmap
-    HashMap<String, String> params = new HashMap<String, String>();
+    Map<String, String> params = new HashMap<String, String>();
     params.put(DESC_PRODUCT_GROUP, product.getProductGroup().name());
     params.put(DESC_INDIVIDUAL, product.getIndividual().toString());
     params.put(DESC_DELIVERY_CHANNEL, product.getDeliveryChannel().name());
@@ -145,19 +146,11 @@ public class RateLimiterClient {
     } catch (ResponseStatusException limiterException) {
       HttpStatus httpStatus = limiterException.getStatus();
       if (httpStatus == HttpStatus.TOO_MANY_REQUESTS) {
-        // Explain which LimitDescriptor(s) triggered the limit breach
-        StringBuilder failureDescription = new StringBuilder("Rate limit(s) breached:");
-        String responseJson = limiterException.getReason();
-        log.with("responseJson", responseJson).debug("Limiter response");
-        response = convertJsonToObject(responseJson);
-        for (int i = 0; i < response.getStatuses().size(); i++) {
-          LimitStatus breachedLimit = response.getStatuses().get(i);
-          if (breachedLimit.getCode().equals(LimitStatus.CODE_LIMIT_BREACHED)) {
-            failureDescription.append(" ");
-            failureDescription.append(describeLimitBreach(request, i));
-          }
-        }
-        log.info(failureDescription.toString());
+        // An expected failure scenario. Record the breach and make sure caller
+        // knows by re-throwing the exception
+        String breachDescription = describeLimitBreach(request, limiterException);
+        log.info(breachDescription.toString());
+        throw limiterException;
       } else {
         // Something unexpected went wrong
         log.warn("Limiter request failed");
@@ -170,7 +163,6 @@ public class RateLimiterClient {
                 + httpStatus.name()
                 + ")");
       }
-      throw limiterException;
     }
 
     return response;
@@ -194,7 +186,7 @@ public class RateLimiterClient {
   // This is a key method that bunches together the various arguments that the limiter will be using
   // to decide if the request has breached any limits.
   private RateLimitRequest createRateLimitRequest(
-      Domain domain, HashMap<String, String> descriptorData) {
+      Domain domain, Map<String, String> descriptorData) {
 
     List<LimitDescriptor> descriptors = new ArrayList<>();
     descriptors.add(createLimitDescriptor(DESCRIPTORS_WITH_UPRN, descriptorData));
@@ -215,7 +207,7 @@ public class RateLimiterClient {
   }
 
   private LimitDescriptor createLimitDescriptor(
-      String[] descriptorList, HashMap<String, String> descriptorData) {
+      String[] descriptorList, Map<String, String> descriptorData) {
 
     List<DescriptorEntry> entries = new ArrayList<>();
     for (String descriptorName : descriptorList) {
@@ -229,8 +221,27 @@ public class RateLimiterClient {
     return limitDescriptor;
   }
 
-  // Build a string to summarise the data which triggered a limit breach
-  private String describeLimitBreach(RateLimitRequest request, int i) {
+  // Builds a String which lists the LimitDescriptor(s) that triggered a limit breach
+  private String describeLimitBreach(
+      RateLimitRequest request, ResponseStatusException limiterException) throws CTPException {
+
+    StringBuilder failureDescription = new StringBuilder("Rate limit(s) breached:");
+    String responseJson = limiterException.getReason();
+    log.with("responseJson", responseJson).debug("Limiter response");
+    RateLimitResponse limiterResponse = convertJsonToObject(responseJson);
+    for (int i = 0; i < limiterResponse.getStatuses().size(); i++) {
+      LimitStatus breachedLimit = limiterResponse.getStatuses().get(i);
+      if (breachedLimit.getCode().equals(LimitStatus.CODE_LIMIT_BREACHED)) {
+        failureDescription.append(" ");
+        failureDescription.append(describeSingleBreach(request, i));
+      }
+    }
+
+    return failureDescription.toString();
+  }
+
+  // Build a string to summarise the limitDescriptor which triggered a limit breach
+  private String describeSingleBreach(RateLimitRequest request, int i) {
     int failureNumber = i + 1;
     StringBuilder desc = new StringBuilder("(" + failureNumber + ") ");
 
