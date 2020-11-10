@@ -11,7 +11,7 @@
       "limitRemaining": 999
     },
     {
-      "code": "OK",
+      "code": "OVER_LIMIT",
       "currentLimit": {
         "requestsPerUnit": 200,
         "unit": "HOUR"
@@ -20,6 +20,22 @@
     },
     {
       "code": "OVER_LIMIT",
+      "currentLimit": {
+        "requestsPerUnit": 200,
+        "unit": "HOUR"
+      },
+      "limitRemaining": 999
+    },
+    {
+      "code": "OK",
+      "currentLimit": {
+        "requestsPerUnit": 200,
+        "unit": "HOUR"
+      },
+      "limitRemaining": 999
+    },
+    {
+      "code": "OK",
       "currentLimit": {
         "requestsPerUnit": 200,
         "unit": "HOUR"

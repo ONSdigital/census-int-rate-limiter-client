@@ -60,7 +60,6 @@ public class RateLimiterClientTest {
   private Domain domain = RateLimiterClient.Domain.RH;
   private UniquePropertyReferenceNumber uprn = new UniquePropertyReferenceNumber("24234234");
   private CaseType caseType = CaseType.HH;
-  private String ipAddress = "123.123.123.123";
 
   @Test
   public void checkRateLimit_nullDomain() {
@@ -69,19 +68,29 @@ public class RateLimiterClientTest {
             CTPException.class,
             () -> {
               rateLimiterClient.checkRateLimit(
-                  null, product, caseType, ipAddress, uprn, "0171 3434");
+                  null, product, caseType, "100.101.88.99", uprn, "0171 3434");
             });
-    assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
+    assertTrue(exception.getMessage(), exception.getMessage().contains("'domain' cannot be null"));
   }
 
   @Test
-  public void checkRateLimit_belowThreshold_withTelNo() throws CTPException {
-    doCheckRateLimit_belowThreshold(true);
+  public void checkRateLimit_belowThreshold_withNeitherTelNoOrIP() throws CTPException {
+    doCheckRateLimit_belowThreshold(false, false);
   }
 
   @Test
-  public void checkRateLimit_belowThreshold_withoutTelNo() throws CTPException {
-    doCheckRateLimit_belowThreshold(false);
+  public void checkRateLimit_belowThreshold_withNoTelButWithIP() throws CTPException {
+    doCheckRateLimit_belowThreshold(false, true);
+  }
+
+  @Test
+  public void checkRateLimit_belowThreshold_withTelNoAndNoIP() throws CTPException {
+    doCheckRateLimit_belowThreshold(true, false);
+  }
+
+  @Test
+  public void checkRateLimit_belowThreshold_withBothTelNoAndIP() throws CTPException {
+    doCheckRateLimit_belowThreshold(true, true);
   }
 
   @Test
@@ -99,7 +108,8 @@ public class RateLimiterClientTest {
 
     // Confirm that limiter request fails with a 429 exception
     try {
-      rateLimiterClient.checkRateLimit(domain, product, caseType, ipAddress, uprn, "0171 3434");
+      rateLimiterClient.checkRateLimit(
+          domain, product, caseType, "123.111.222.23", uprn, "0171 3434");
       fail();
     } catch (ResponseStatusException e) {
       assertEquals(failureException, e);
@@ -122,7 +132,7 @@ public class RateLimiterClientTest {
 
     // Confirm that limiter request fails with a CTPException
     try {
-      rateLimiterClient.checkRateLimit(domain, product, caseType, ipAddress, uprn, null);
+      rateLimiterClient.checkRateLimit(domain, product, caseType, null, uprn, null);
       fail();
     } catch (CTPException e) {
       assertEquals(failureException, e.getCause());
@@ -143,7 +153,7 @@ public class RateLimiterClientTest {
 
     // Confirm that limiter request fails with a CTPException
     try {
-      rateLimiterClient.checkRateLimit(domain, product, caseType, ipAddress, uprn, null);
+      rateLimiterClient.checkRateLimit(domain, product, caseType, null, uprn, null);
       fail();
     } catch (CTPException e) {
       assertTrue(e.getMessage().contains("Failed to parse"));
@@ -157,8 +167,7 @@ public class RateLimiterClientTest {
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkRateLimit(
-                  domain, null, caseType, ipAddress, uprn, "0171 3434");
+              rateLimiterClient.checkRateLimit(domain, null, caseType, null, uprn, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
   }
@@ -169,18 +178,7 @@ public class RateLimiterClientTest {
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkRateLimit(domain, product, null, ipAddress, uprn, "0171 3434");
-            });
-    assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
-  }
-
-  @Test
-  public void checkRateLimit_nullIpAddress() {
-    CTPException exception =
-        assertThrows(
-            CTPException.class,
-            () -> {
-              rateLimiterClient.checkRateLimit(domain, product, caseType, null, uprn, "0171 3434");
+              rateLimiterClient.checkRateLimit(domain, product, null, null, uprn, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
   }
@@ -202,30 +200,31 @@ public class RateLimiterClientTest {
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkRateLimit(
-                  domain, product, caseType, ipAddress, null, "0171 3434");
+              rateLimiterClient.checkRateLimit(domain, product, caseType, null, null, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
   }
 
   @Test
-  public void checkRateLimit_blankIpTelNo() {
+  public void checkRateLimit_blankTelNo() {
     CTPException exception =
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkRateLimit(domain, product, caseType, ipAddress, uprn, "");
+              rateLimiterClient.checkRateLimit(domain, product, caseType, null, uprn, "");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be blank"));
   }
 
-  private void doCheckRateLimit_belowThreshold(boolean useTelNo) throws CTPException {
+  private void doCheckRateLimit_belowThreshold(boolean useTelNo, boolean useIpAddress)
+      throws CTPException {
 
     RateLimitResponse fakeResponse = new RateLimitResponse();
     Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class), eq("")))
         .thenReturn(fakeResponse);
 
     String telNo = useTelNo ? "0123 3434333" : null;
+    String ipAddress = useIpAddress ? "123.123.123.123" : null;
     RateLimitResponse response =
         rateLimiterClient.checkRateLimit(domain, product, caseType, ipAddress, uprn, telNo);
     assertEquals(fakeResponse, response);
@@ -236,13 +235,25 @@ public class RateLimiterClientTest {
     Mockito.verify(restClient).postResource(any(), limitRequestCaptor.capture(), any(), any());
     RateLimitRequest request = limitRequestCaptor.getValue();
 
-    // Verify that the limit request is correct
-    int expectedNumDescriptors = useTelNo ? 3 : 2;
+    // Verify that the limit request contains the correct number of descriptors
+    int expectedNumDescriptors = 2;
+    expectedNumDescriptors += useTelNo ? 2 : 0;
+    expectedNumDescriptors += useIpAddress ? 1 : 0;
     assertEquals(expectedNumDescriptors, request.getDescriptors().size());
-    verifyDescriptor(request, 0, product, caseType, "ipAddress", ipAddress);
-    verifyDescriptor(request, 1, product, caseType, "uprn", Long.toString(uprn.getValue()));
+
+    // Verify that the limit request is correct, for whatever combination of mandatory and
+    // optional data we are currently testing
+    int i = 0;
+    verifyDescriptor(request, i++, product, caseType, "uprn", Long.toString(uprn.getValue()));
     if (useTelNo) {
-      verifyDescriptor(request, 2, product, caseType, "telNo", telNo);
+      verifyDescriptor(request, i++, product, caseType, "telNo", telNo);
+    }
+    verifyDescriptor(request, i++, product, "uprn", Long.toString(uprn.getValue()));
+    if (useTelNo) {
+      verifyDescriptor(request, i++, product, "telNo", telNo);
+    }
+    if (useIpAddress) {
+      verifyDescriptor(request, i++, product, "ipAddress", ipAddress);
     }
   }
 
@@ -255,11 +266,23 @@ public class RateLimiterClientTest {
       String finalKeyValue) {
     LimitDescriptor descriptor = request.getDescriptors().get(index);
     assertEquals(5, descriptor.getEntries().size());
-    verifyEntry(descriptor, 0, "productGroup", product.getProductGroup().name());
-    verifyEntry(descriptor, 1, "individual", Boolean.toString(product.getIndividual()));
-    verifyEntry(descriptor, 2, "deliveryChannel", product.getDeliveryChannel().name());
+    verifyEntry(descriptor, 0, "deliveryChannel", product.getDeliveryChannel().name());
+    verifyEntry(descriptor, 1, "productGroup", product.getProductGroup().name());
+    verifyEntry(descriptor, 2, "individual", Boolean.toString(product.getIndividual()));
     verifyEntry(descriptor, 3, "caseType", caseType.name());
     verifyEntry(descriptor, 4, finalKeyName, finalKeyValue);
+  }
+
+  private void verifyDescriptor(
+      RateLimitRequest request,
+      int index,
+      Product product,
+      String finalKeyName,
+      String finalKeyValue) {
+    LimitDescriptor descriptor = request.getDescriptors().get(index);
+    assertEquals(2, descriptor.getEntries().size());
+    verifyEntry(descriptor, 0, "deliveryChannel", product.getDeliveryChannel().name());
+    verifyEntry(descriptor, 1, finalKeyName, finalKeyValue);
   }
 
   private void verifyEntry(
