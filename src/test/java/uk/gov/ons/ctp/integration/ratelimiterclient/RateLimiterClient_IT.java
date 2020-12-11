@@ -72,24 +72,39 @@ public class RateLimiterClient_IT {
   }
 
   @Test
-  public void runTest() throws JsonProcessingException, CTPException {
+  public void runFulfilmentLimitTest() throws JsonProcessingException, CTPException {
     if (limiterHost == null) {
       return;
     }
 
-    invokeLimitEndpoint("1) /limit?enabled=false", false);
-    invokeJsonEndpoint("2) no telNo or IP /json", false, false, HttpStatus.OK);
-    invokeJsonEndpoint("3) no telNo but with IP /json", false, true, HttpStatus.OK);
-    invokeJsonEndpoint("4) telNo but no IP /json", true, false, HttpStatus.OK);
-    invokeJsonEndpoint("5) telNo and IP /json", true, true, HttpStatus.OK);
+    invokeLimitEnabledEndpoint("1) /limit?enabled=false", false);
+    invokeFulfilmentRateLimitCheck("2) no telNo or IP /json", false, false, HttpStatus.OK);
+    invokeFulfilmentRateLimitCheck("3) no telNo but with IP /json", false, true, HttpStatus.OK);
+    invokeFulfilmentRateLimitCheck("4) telNo but no IP /json", true, false, HttpStatus.OK);
+    invokeFulfilmentRateLimitCheck("5) telNo and IP /json", true, true, HttpStatus.OK);
 
-    invokeLimitEndpoint("6) /limit?enabled=true", true);
-    invokeJsonEndpoint("7) /json", false, false, HttpStatus.TOO_MANY_REQUESTS);
+    invokeLimitEnabledEndpoint("6) /limit?enabled=true", true);
+    invokeFulfilmentRateLimitCheck("7) /json", false, false, HttpStatus.TOO_MANY_REQUESTS);
 
     System.out.println("\n** Test completed without error **");
   }
 
-  private void invokeLimitEndpoint(String narrative, boolean tooManyRequests) {
+  @Test
+  public void runWebformLimitTest() throws JsonProcessingException, CTPException {
+    if (limiterHost == null) {
+      return;
+    }
+
+    invokeLimitEnabledEndpoint("1) /limit?enabled=false", false);
+    invokeWebformRateLimitCheck("2) Webform check below limit", HttpStatus.OK);
+
+    invokeLimitEnabledEndpoint("3) /limit?enabled=true", true);
+    invokeWebformRateLimitCheck("4) Webform check above limit", HttpStatus.TOO_MANY_REQUESTS);
+
+    System.out.println("\n** Test completed without error **");
+  }
+
+  private void invokeLimitEnabledEndpoint(String narrative, boolean tooManyRequests) {
     System.out.println(narrative);
 
     Map<String, String> headerParams = new HashMap<>();
@@ -103,7 +118,7 @@ public class RateLimiterClient_IT {
     System.out.println();
   }
 
-  private void invokeJsonEndpoint(
+  private void invokeFulfilmentRateLimitCheck(
       String narrative, boolean useTelNo, boolean useIP, HttpStatus expectedHttpStatus)
       throws JsonProcessingException, CTPException {
     System.out.println(narrative);
@@ -129,7 +144,7 @@ public class RateLimiterClient_IT {
 
       // Get client to call /json endpoint
       RateLimitResponse response =
-          client.checkRateLimit(
+          client.checkFulfilmentRateLimit(
               RateLimiterClient.Domain.RH,
               product,
               CaseType.HH,
@@ -142,7 +157,33 @@ public class RateLimiterClient_IT {
 
     } catch (ResponseStatusException e) {
       actualHttpStatus = e.getStatus();
-      System.out.println("InvokeJsonEndpoint: Caught exception: " + actualHttpStatus);
+      System.out.println("invokeFulfilmentRateLimitCheck: Caught exception: " + actualHttpStatus);
+      System.out.println("Response:");
+      System.out.println(e.getReason());
+    }
+
+    assertEquals(expectedHttpStatus, actualHttpStatus);
+    System.out.println();
+  }
+
+  private void invokeWebformRateLimitCheck(
+      String narrative, HttpStatus expectedHttpStatus)
+      throws JsonProcessingException, CTPException {
+    System.out.println(narrative);
+    System.out.println("Expecting: " + expectedHttpStatus.name());
+
+    HttpStatus actualHttpStatus;
+    try {
+      // Get client to call /json endpoint
+      RateLimitResponse response =
+          client.checkWebformRateLimit(RateLimiterClient.Domain.RH, "100.233.73.101");
+      System.out.println("Response:");
+      System.out.println(convertToJson(response));
+      actualHttpStatus = HttpStatus.valueOf(Integer.parseInt(response.getOverallCode()));
+
+    } catch (ResponseStatusException e) {
+      actualHttpStatus = e.getStatus();
+      System.out.println("invokeWebformRateLimitCheck: Caught exception: " + actualHttpStatus);
       System.out.println("Response:");
       System.out.println(e.getReason());
     }

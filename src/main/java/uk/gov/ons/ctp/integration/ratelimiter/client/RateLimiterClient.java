@@ -37,7 +37,7 @@ public class RateLimiterClient {
     }
   }
 
-  // Names of descriptor entries for limiter request
+  // Names of descriptor entries for limiter requests
   private static final String DESC_PRODUCT_GROUP = "productGroup";
   private static final String DESC_INDIVIDUAL = "individual";
   private static final String DESC_DELIVERY_CHANNEL = "deliveryChannel";
@@ -45,8 +45,9 @@ public class RateLimiterClient {
   private static final String DESC_IP_ADDRESS = "ipAddress";
   private static final String DESC_UPRN = "uprn";
   private static final String DESC_TEL_NO = "telNo";
+  private static final String DESC_REQUEST = "request";
 
-  // Lists of descriptors to be sent to the limiter
+  // Lists of descriptors to be sent to the limiter. Fulfilment requests only.
   private static String[] DESCRIPTORS_WITH_UPRN = {
     DESC_DELIVERY_CHANNEL, DESC_PRODUCT_GROUP, DESC_INDIVIDUAL, DESC_CASE_TYPE, DESC_UPRN
   };
@@ -58,6 +59,10 @@ public class RateLimiterClient {
   private static String[] DELIVERYCHANNEL_WITH_ONLY_IP_ADDRESS = {
     DESC_DELIVERY_CHANNEL, DESC_IP_ADDRESS
   };
+
+  // Descriptors used to build limit request for webform
+  private static String[] DESCRIPTORS_WEBFORM = { DESC_REQUEST, DESC_IP_ADDRESS };
+
 
   private static final String RATE_LIMITER_QUERY_PATH = "/json";
 
@@ -73,7 +78,7 @@ public class RateLimiterClient {
   }
 
   /**
-   * Send limit request to the limiter.
+   * Send fulfilment limit request to the limiter.
    *
    * <p>If no limit has been breached then this method returns. If there is an internal error or if
    * a limit is breached then an exception is thrown.
@@ -95,7 +100,7 @@ public class RateLimiterClient {
    *     has been breached then the exception status will be HttpStatus.TOO_MANY_REQUESTS and the
    *     exception's reason field will contain the limiters json response.
    */
-  public RateLimitResponse checkRateLimit(
+  public RateLimitResponse checkFulfilmentRateLimit(
       Domain domain,
       Product product,
       CaseType caseType,
@@ -120,7 +125,7 @@ public class RateLimiterClient {
         .with("ipAddress", ipAddress)
         .with("uprn", uprn.getValue())
         .with("telNo", redactTelephoneNumber(telNo))
-        .info("Going to call Rate Limiter Service");
+        .info("Fulfilment rate limit. Going to call Rate Limiter Service");
 
     // Make it easy to access limiter parameters by adding to a hashmap
     Map<String, String> params = new HashMap<String, String>();
@@ -133,8 +138,8 @@ public class RateLimiterClient {
     params.put(DESC_TEL_NO, telNo);
 
     // Create request
-    RateLimitRequest request = createRateLimitRequest(domain, params);
-    log.with(request).debug("RateLimiterRequest");
+    RateLimitRequest request = createRateLimitRequestForFulfilment(domain, params);
+    log.with(request).debug("RateLimiterRequest for fulfilment");
 
     // Send request to limiter, with detailed logging if we breached a limit
     RateLimitResponse response;
@@ -153,11 +158,83 @@ public class RateLimiterClient {
         throw limiterException;
       } else {
         // Something unexpected went wrong
-        log.warn("Limiter request failed");
+        log.warn("Limiter request for fulfilments failed");
         throw new CTPException(
             Fault.SYSTEM_ERROR,
             limiterException,
-            "POST request to limiter failed with http status: "
+            "POST request to limiter (for fulfilments) failed with http status: "
+                + httpStatus.value()
+                + "("
+                + httpStatus.name()
+                + ")");
+      }
+    }
+
+    return response;
+  }
+  
+  
+  /**
+   * Send webform limit request to the limiter.
+   *
+   * <p>If no limit has been breached then this method returns. If there is an internal error or if
+   * a limit is breached then an exception is thrown.
+   *
+   * @param domain is the domain to query against. This value is mandatory.
+   * @param ipAddress is the end users ip address. This value can be null, but if supplied then it
+   *     cannot be an empty string.
+   * @return The response from the rate limiter, or null if the rate limiter was not called.
+   * @throws CTPException if there is a processing error or if an invalid argument is supplied.
+   * @throws ResponseStatusException if the request to the limiter didn't return a 200. If a limit
+   *     has been breached then the exception status will be HttpStatus.TOO_MANY_REQUESTS and the
+   *     exception's reason field will contain the limiters json response.
+   */
+  public RateLimitResponse checkWebformRateLimit(Domain domain, String ipAddress) throws CTPException, ResponseStatusException {
+
+    // Fail if caller doesn't meet interface requirements
+    verifyArgumentSupplied("domain", domain);
+    verifyArgumentNotEmpty("ipAddress", ipAddress);
+
+    log.with("ipAddress", ipAddress)
+        .info("Check webform rate limit");
+
+    // Skip check if RHUI has not been able to get the clients IP address
+    if (ipAddress == null) {
+      log.debug("Not calling rate limiter");
+      return null;
+    }
+    
+    // Make it easy to access limiter parameters by adding to a hashmap
+    Map<String, String> params = new HashMap<String, String>();
+    params.put(DESC_REQUEST, "WEBFORM");
+    params.put(DESC_IP_ADDRESS, ipAddress);
+
+    // Create request
+    RateLimitRequest request = createWebformRateLimitRequest(domain, params);
+    log.with(request).debug("RateLimiterRequest for Webform");
+
+    // Send request to limiter, with detailed logging if we breached a limit
+    RateLimitResponse response;
+    try {
+      response =
+          rateLimiterClient.postResource(
+              RATE_LIMITER_QUERY_PATH, request, RateLimitResponse.class, "");
+
+    } catch (ResponseStatusException limiterException) {
+      HttpStatus httpStatus = limiterException.getStatus();
+      if (httpStatus == HttpStatus.TOO_MANY_REQUESTS) {
+        // An expected failure scenario. Record the breach and make sure caller
+        // knows by re-throwing the exception
+        String breachDescription = describeLimitBreach(request, limiterException);
+        log.info(breachDescription.toString());
+        throw limiterException;
+      } else {
+        // Something unexpected went wrong
+        log.warn("Limiter request for Webform failed");
+        throw new CTPException(
+            Fault.SYSTEM_ERROR,
+            limiterException,
+            "POST request to limiter (for Webform) failed with http status: "
                 + httpStatus.value()
                 + "("
                 + httpStatus.name()
@@ -168,6 +245,7 @@ public class RateLimiterClient {
     return response;
   }
 
+  
   // Throws CTPException is the argument is null
   private void verifyArgumentSupplied(String argName, Object argValue) throws CTPException {
     if (argValue == null) {
@@ -185,7 +263,7 @@ public class RateLimiterClient {
 
   // This is a key method that bunches together the various arguments that the limiter will be using
   // to decide if the request has breached any limits.
-  private RateLimitRequest createRateLimitRequest(
+  private RateLimitRequest createRateLimitRequestForFulfilment(
       Domain domain, Map<String, String> descriptorData) {
 
     List<LimitDescriptor> descriptors = new ArrayList<>();
@@ -200,6 +278,17 @@ public class RateLimiterClient {
     if (descriptorData.get(DESC_IP_ADDRESS) != null) {
       descriptors.add(createLimitDescriptor(DELIVERYCHANNEL_WITH_ONLY_IP_ADDRESS, descriptorData));
     }
+
+    RateLimitRequest request =
+        RateLimitRequest.builder().domain(domain.domainName).descriptors(descriptors).build();
+    return request;
+  }
+
+  private RateLimitRequest createWebformRateLimitRequest(
+      Domain domain, Map<String, String> descriptorData) {
+
+    List<LimitDescriptor> descriptors = new ArrayList<>();
+    descriptors.add(createLimitDescriptor(DESCRIPTORS_WEBFORM, descriptorData));
 
     RateLimitRequest request =
         RateLimitRequest.builder().domain(domain.domainName).descriptors(descriptors).build();
