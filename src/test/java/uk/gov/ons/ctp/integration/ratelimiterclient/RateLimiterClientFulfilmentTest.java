@@ -33,12 +33,9 @@ import uk.gov.ons.ctp.integration.ratelimiter.model.LimitDescriptor;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitRequest;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
 
-/**
- * This class contains unit tests for the CaseServiceClientServiceImpl class. It mocks out the Rest
- * calls and returns dummy responses to represent what would be returned by the case service.
- */
+/** This class contains unit tests for limit testing fulfilment requests. */
 @RunWith(MockitoJUnitRunner.class)
-public class RateLimiterClientTest {
+public class RateLimiterClientFulfilmentTest {
 
   @Mock RestClient restClient;
 
@@ -62,39 +59,39 @@ public class RateLimiterClientTest {
   private CaseType caseType = CaseType.HH;
 
   @Test
-  public void checkRateLimit_nullDomain() {
+  public void checkFulfilmentRateLimit_nullDomain() {
     CTPException exception =
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkRateLimit(
+              rateLimiterClient.checkFulfilmentRateLimit(
                   null, product, caseType, "100.101.88.99", uprn, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("'domain' cannot be null"));
   }
 
   @Test
-  public void checkRateLimit_belowThreshold_withNeitherTelNoOrIP() throws CTPException {
-    doCheckRateLimit_belowThreshold(false, false);
+  public void checkFulfilmentRateLimit_belowThreshold_withNeitherTelNoOrIP() throws CTPException {
+    docheckFulfilmentRateLimit_belowThreshold(false, false);
   }
 
   @Test
-  public void checkRateLimit_belowThreshold_withNoTelButWithIP() throws CTPException {
-    doCheckRateLimit_belowThreshold(false, true);
+  public void checkFulfilmentRateLimit_belowThreshold_withNoTelButWithIP() throws CTPException {
+    docheckFulfilmentRateLimit_belowThreshold(false, true);
   }
 
   @Test
-  public void checkRateLimit_belowThreshold_withTelNoAndNoIP() throws CTPException {
-    doCheckRateLimit_belowThreshold(true, false);
+  public void checkFulfilmentRateLimit_belowThreshold_withTelNoAndNoIP() throws CTPException {
+    docheckFulfilmentRateLimit_belowThreshold(true, false);
   }
 
   @Test
-  public void checkRateLimit_belowThreshold_withBothTelNoAndIP() throws CTPException {
-    doCheckRateLimit_belowThreshold(true, true);
+  public void checkFulfilmentRateLimit_belowThreshold_withBothTelNoAndIP() throws CTPException {
+    docheckFulfilmentRateLimit_belowThreshold(true, true);
   }
 
   @Test
-  public void checkRateLimit_aboveThreshold() throws Exception {
+  public void checkFulfilmentRateLimit_aboveThreshold() throws Exception {
     // Limit request is going to fail with exception. This needs to contain a string with the
     // limiters
     // too-many-requests response
@@ -108,7 +105,7 @@ public class RateLimiterClientTest {
 
     // Confirm that limiter request fails with a 429 exception
     try {
-      rateLimiterClient.checkRateLimit(
+      rateLimiterClient.checkFulfilmentRateLimit(
           domain, product, caseType, "123.111.222.23", uprn, "0171 3434");
       fail();
     } catch (ResponseStatusException e) {
@@ -118,7 +115,7 @@ public class RateLimiterClientTest {
   }
 
   @Test
-  public void checkRateLimit_limiterOtherError() throws Exception {
+  public void checkFulfilmentRateLimit_limiterOtherError() throws Exception {
     // Limit request is going to fail with exception that simulates an unexpected error from the
     // limiter. ie, http
     // response status is neither an expected 200 or 429
@@ -132,7 +129,7 @@ public class RateLimiterClientTest {
 
     // Confirm that limiter request fails with a CTPException
     try {
-      rateLimiterClient.checkRateLimit(domain, product, caseType, null, uprn, null);
+      rateLimiterClient.checkFulfilmentRateLimit(domain, product, caseType, null, uprn, null);
       fail();
     } catch (CTPException e) {
       assertEquals(failureException, e.getCause());
@@ -141,7 +138,7 @@ public class RateLimiterClientTest {
   }
 
   @Test
-  public void checkRateLimit_corruptedLimiterJson() throws Exception {
+  public void checkFulfilmentRateLimit_corruptedLimiterJson() throws Exception {
     // This test simulates an internal error in which the call to the limiter has responded with a
     // 429 but
     // the response JSon has somehow been corrupted
@@ -153,7 +150,7 @@ public class RateLimiterClientTest {
 
     // Confirm that limiter request fails with a CTPException
     try {
-      rateLimiterClient.checkRateLimit(domain, product, caseType, null, uprn, null);
+      rateLimiterClient.checkFulfilmentRateLimit(domain, product, caseType, null, uprn, null);
       fail();
     } catch (CTPException e) {
       assertTrue(e.getMessage().contains("Failed to parse"));
@@ -162,61 +159,65 @@ public class RateLimiterClientTest {
   }
 
   @Test
-  public void checkRateLimit_nullProduct() {
+  public void checkFulfilmentRateLimit_nullProduct() {
     CTPException exception =
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkRateLimit(domain, null, caseType, null, uprn, "0171 3434");
+              rateLimiterClient.checkFulfilmentRateLimit(
+                  domain, null, caseType, null, uprn, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
   }
 
   @Test
-  public void checkRateLimit_nullCaseType() {
+  public void checkFulfilmentRateLimit_nullCaseType() {
     CTPException exception =
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkRateLimit(domain, product, null, null, uprn, "0171 3434");
+              rateLimiterClient.checkFulfilmentRateLimit(
+                  domain, product, null, null, uprn, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
   }
 
   @Test
-  public void checkRateLimit_blankIpAddress() {
+  public void checkFulfilmentRateLimit_blankIpAddress() {
     CTPException exception =
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkRateLimit(domain, product, caseType, " ", uprn, "0171 3434");
+              rateLimiterClient.checkFulfilmentRateLimit(
+                  domain, product, caseType, " ", uprn, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be blank"));
   }
 
   @Test
-  public void checkRateLimit_nullUprn() {
+  public void checkFulfilmentRateLimit_nullUprn() {
     CTPException exception =
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkRateLimit(domain, product, caseType, null, null, "0171 3434");
+              rateLimiterClient.checkFulfilmentRateLimit(
+                  domain, product, caseType, null, null, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
   }
 
   @Test
-  public void checkRateLimit_blankTelNo() {
+  public void checkFulfilmentRateLimit_blankTelNo() {
     CTPException exception =
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkRateLimit(domain, product, caseType, null, uprn, "");
+              rateLimiterClient.checkFulfilmentRateLimit(domain, product, caseType, null, uprn, "");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be blank"));
   }
 
-  private void doCheckRateLimit_belowThreshold(boolean useTelNo, boolean useIpAddress)
+  private void docheckFulfilmentRateLimit_belowThreshold(boolean useTelNo, boolean useIpAddress)
       throws CTPException {
 
     RateLimitResponse fakeResponse = new RateLimitResponse();
@@ -226,7 +227,8 @@ public class RateLimiterClientTest {
     String telNo = useTelNo ? "0123 3434333" : null;
     String ipAddress = useIpAddress ? "123.123.123.123" : null;
     RateLimitResponse response =
-        rateLimiterClient.checkRateLimit(domain, product, caseType, ipAddress, uprn, telNo);
+        rateLimiterClient.checkFulfilmentRateLimit(
+            domain, product, caseType, ipAddress, uprn, telNo);
     assertEquals(fakeResponse, response);
 
     // Grab the request sent to the limiter
