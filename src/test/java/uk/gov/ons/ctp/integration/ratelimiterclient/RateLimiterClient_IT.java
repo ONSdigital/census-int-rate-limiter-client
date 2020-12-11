@@ -166,8 +166,7 @@ public class RateLimiterClient_IT {
     System.out.println();
   }
 
-  private void invokeWebformRateLimitCheck(
-      String narrative, HttpStatus expectedHttpStatus)
+  private void invokeWebformRateLimitCheck(String narrative, HttpStatus expectedHttpStatus)
       throws JsonProcessingException, CTPException {
     System.out.println(narrative);
     System.out.println("Expecting: " + expectedHttpStatus.name());

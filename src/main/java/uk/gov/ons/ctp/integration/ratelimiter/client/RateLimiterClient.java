@@ -61,17 +61,16 @@ public class RateLimiterClient {
   };
 
   // Descriptors used to build limit request for webform
-  private static String[] DESCRIPTORS_WEBFORM = { DESC_REQUEST, DESC_IP_ADDRESS };
-
+  private static String[] DESCRIPTORS_WEBFORM = {DESC_REQUEST, DESC_IP_ADDRESS};
 
   private static final String RATE_LIMITER_QUERY_PATH = "/json";
 
-  private RestClient rateLimiterClient;
+  private RestClient envoyLimiterRestClient;
   private ObjectMapper objectMapper = new ObjectMapper();
 
-  public RateLimiterClient(RestClient rateLimiterClient) {
+  public RateLimiterClient(RestClient envoyLimiterRestClient) {
     super();
-    this.rateLimiterClient = rateLimiterClient;
+    this.envoyLimiterRestClient = envoyLimiterRestClient;
 
     this.objectMapper = new ObjectMapper();
     this.objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
@@ -145,7 +144,7 @@ public class RateLimiterClient {
     RateLimitResponse response;
     try {
       response =
-          rateLimiterClient.postResource(
+          envoyLimiterRestClient.postResource(
               RATE_LIMITER_QUERY_PATH, request, RateLimitResponse.class, "");
 
     } catch (ResponseStatusException limiterException) {
@@ -172,8 +171,7 @@ public class RateLimiterClient {
 
     return response;
   }
-  
-  
+
   /**
    * Send webform limit request to the limiter.
    *
@@ -189,21 +187,21 @@ public class RateLimiterClient {
    *     has been breached then the exception status will be HttpStatus.TOO_MANY_REQUESTS and the
    *     exception's reason field will contain the limiters json response.
    */
-  public RateLimitResponse checkWebformRateLimit(Domain domain, String ipAddress) throws CTPException, ResponseStatusException {
+  public RateLimitResponse checkWebformRateLimit(Domain domain, String ipAddress)
+      throws CTPException, ResponseStatusException {
 
     // Fail if caller doesn't meet interface requirements
     verifyArgumentSupplied("domain", domain);
     verifyArgumentNotEmpty("ipAddress", ipAddress);
 
-    log.with("ipAddress", ipAddress)
-        .info("Check webform rate limit");
+    log.with("ipAddress", ipAddress).info("Check webform rate limit");
 
     // Skip check if RHUI has not been able to get the clients IP address
     if (ipAddress == null) {
       log.debug("Not calling rate limiter");
       return null;
     }
-    
+
     // Make it easy to access limiter parameters by adding to a hashmap
     Map<String, String> params = new HashMap<String, String>();
     params.put(DESC_REQUEST, "WEBFORM");
@@ -217,7 +215,7 @@ public class RateLimiterClient {
     RateLimitResponse response;
     try {
       response =
-          rateLimiterClient.postResource(
+          envoyLimiterRestClient.postResource(
               RATE_LIMITER_QUERY_PATH, request, RateLimitResponse.class, "");
 
     } catch (ResponseStatusException limiterException) {
@@ -245,7 +243,6 @@ public class RateLimiterClient {
     return response;
   }
 
-  
   // Throws CTPException is the argument is null
   private void verifyArgumentSupplied(String argName, Object argValue) throws CTPException {
     if (argValue == null) {

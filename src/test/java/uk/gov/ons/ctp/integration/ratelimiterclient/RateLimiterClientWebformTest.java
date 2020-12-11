@@ -7,6 +7,8 @@ import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -16,7 +18,6 @@ import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import uk.gov.ons.ctp.common.FixtureHelper;
 import uk.gov.ons.ctp.common.error.CTPException;
 import uk.gov.ons.ctp.common.error.CTPException.Fault;
@@ -28,9 +29,7 @@ import uk.gov.ons.ctp.integration.ratelimiter.model.LimitDescriptor;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitRequest;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
 
-/**
- * This class contains unit tests for limit testing Webform requests.
- */
+/** This class contains unit tests for limit testing Webform requests. */
 @RunWith(MockitoJUnitRunner.class)
 public class RateLimiterClientWebformTest {
 
@@ -40,7 +39,6 @@ public class RateLimiterClientWebformTest {
 
   private Domain domain = RateLimiterClient.Domain.RH;
 
-  
   @Test
   public void checkWebformRateLimit_nullDomain() {
     CTPException exception =
@@ -75,18 +73,18 @@ public class RateLimiterClientWebformTest {
     RateLimitResponse fakeResponse = new RateLimitResponse();
     Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class), eq("")))
         .thenReturn(fakeResponse);
-   
+
     // Run test
     String ipAddress = "123.123.123.123";
     RateLimitResponse response = rateLimiterClient.checkWebformRateLimit(domain, ipAddress);
     assertEquals(fakeResponse, response);
-    
+
     // Grab the request sent to the limiter
     ArgumentCaptor<RateLimitRequest> limitRequestCaptor =
         ArgumentCaptor.forClass(RateLimitRequest.class);
     Mockito.verify(restClient).postResource(any(), limitRequestCaptor.capture(), any(), any());
     RateLimitRequest request = limitRequestCaptor.getValue();
-    
+
     // Verify that the limit request contains a ipAddress based descriptor
     assertEquals(1, request.getDescriptors().size());
     verifyDescriptor(request, 0, "ipAddress", ipAddress);
@@ -156,14 +154,14 @@ public class RateLimiterClientWebformTest {
     }
   }
 
-  private void verifyDescriptor(RateLimitRequest request, int index,
-      String finalKeyName, String finalKeyValue) {
+  private void verifyDescriptor(
+      RateLimitRequest request, int index, String finalKeyName, String finalKeyValue) {
     LimitDescriptor descriptor = request.getDescriptors().get(index);
     assertEquals(2, descriptor.getEntries().size());
     verifyEntry(descriptor, 0, "request", "WEBFORM");
     verifyEntry(descriptor, 1, finalKeyName, finalKeyValue);
   }
-  
+
   private void verifyEntry(
       LimitDescriptor descriptor, int index, String expectedKey, String expectedValue) {
     DescriptorEntry entry = descriptor.getEntries().get(index);

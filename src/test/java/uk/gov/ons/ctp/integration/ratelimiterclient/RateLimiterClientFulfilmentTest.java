@@ -33,9 +33,7 @@ import uk.gov.ons.ctp.integration.ratelimiter.model.LimitDescriptor;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitRequest;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
 
-/**
- * This class contains unit tests for limit testing fulfilment requests.
- */
+/** This class contains unit tests for limit testing fulfilment requests. */
 @RunWith(MockitoJUnitRunner.class)
 public class RateLimiterClientFulfilmentTest {
 
@@ -166,7 +164,8 @@ public class RateLimiterClientFulfilmentTest {
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkFulfilmentRateLimit(domain, null, caseType, null, uprn, "0171 3434");
+              rateLimiterClient.checkFulfilmentRateLimit(
+                  domain, null, caseType, null, uprn, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
   }
@@ -177,7 +176,8 @@ public class RateLimiterClientFulfilmentTest {
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkFulfilmentRateLimit(domain, product, null, null, uprn, "0171 3434");
+              rateLimiterClient.checkFulfilmentRateLimit(
+                  domain, product, null, null, uprn, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
   }
@@ -188,7 +188,8 @@ public class RateLimiterClientFulfilmentTest {
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkFulfilmentRateLimit(domain, product, caseType, " ", uprn, "0171 3434");
+              rateLimiterClient.checkFulfilmentRateLimit(
+                  domain, product, caseType, " ", uprn, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be blank"));
   }
@@ -199,7 +200,8 @@ public class RateLimiterClientFulfilmentTest {
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkFulfilmentRateLimit(domain, product, caseType, null, null, "0171 3434");
+              rateLimiterClient.checkFulfilmentRateLimit(
+                  domain, product, caseType, null, null, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
   }
@@ -225,7 +227,8 @@ public class RateLimiterClientFulfilmentTest {
     String telNo = useTelNo ? "0123 3434333" : null;
     String ipAddress = useIpAddress ? "123.123.123.123" : null;
     RateLimitResponse response =
-        rateLimiterClient.checkFulfilmentRateLimit(domain, product, caseType, ipAddress, uprn, telNo);
+        rateLimiterClient.checkFulfilmentRateLimit(
+            domain, product, caseType, ipAddress, uprn, telNo);
     assertEquals(fakeResponse, response);
 
     // Grab the request sent to the limiter
