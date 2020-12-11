@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>uk.gov.ons.ctp.integration.common</groupId>
   <artifactId>census-int-rate-limiter-client</artifactId>
-  <version>0.0.7-SNAPSHOT</version>
+  <version>0.0.7</version>
   <packaging>jar</packaging>
 
   <name>CTP : Integration Rate Limiter Client</name>
@@ -136,7 +136,7 @@
     <url>https://github.com/ONSdigital/census-int-rate-limiter-client</url>
     <connection>scm:git:https://github.com/ONSdigital/census-int-rate-limiter-client</connection>
     <developerConnection>scm:git:https://github.com/ONSdigital/census-int-rate-limiter-client</developerConnection>
-    <tag>HEAD</tag>
+    <tag>census-int-rate-limiter-client-0.0.7</tag>
   </scm>
 
 </project>
