@@ -7,8 +7,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.junit.Before;
 import org.junit.Test;
+import org.springframework.cloud.client.circuitbreaker.CircuitBreaker;
 import org.springframework.http.HttpStatus;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -22,7 +25,6 @@ import uk.gov.ons.ctp.integration.common.product.model.Product;
 import uk.gov.ons.ctp.integration.common.product.model.Product.DeliveryChannel;
 import uk.gov.ons.ctp.integration.common.product.model.Product.ProductGroup;
 import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient;
-import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
 
 /**
  * This is a program for manually testing the client against an real/fake limiter.
@@ -36,6 +38,7 @@ public class RateLimiterClient_IT {
 
   private RestClient restClient;
   private RateLimiterClient client;
+  private CircuitBreaker circuitBreaker;
 
   private ObjectMapper objectMapper;
 
@@ -67,7 +70,22 @@ public class RateLimiterClient_IT {
       this.restClient =
           new RestClient(restClientConfig, httpErrorMapping, HttpStatus.INTERNAL_SERVER_ERROR);
 
-      this.client = new RateLimiterClient(this.restClient);
+      // Create minimalist circuit breaker implementation
+      this.circuitBreaker =
+          new CircuitBreaker() {
+            public <T> T run(Supplier<T> toRun, Function<Throwable, T> fallback) {
+              try {
+                // execute the code that the circuitBreaker is protecting
+                return toRun.get();
+              } catch (Throwable t) {
+                // execute the fallback Function)
+                fallback.apply(t);
+                return null;
+              }
+            }
+          };
+
+      this.client = new RateLimiterClient(this.restClient, circuitBreaker);
     }
   }
 
@@ -143,17 +161,14 @@ public class RateLimiterClient_IT {
       String telNo = useTelNo ? "0123 3434333" : null;
 
       // Get client to call /json endpoint
-      RateLimitResponse response =
-          client.checkFulfilmentRateLimit(
-              RateLimiterClient.Domain.RH,
-              product,
-              CaseType.HH,
-              ipAddress,
-              new UniquePropertyReferenceNumber("24234234"),
-              telNo);
-      System.out.println("Response:");
-      System.out.println(convertToJson(response));
-      actualHttpStatus = HttpStatus.valueOf(Integer.parseInt(response.getOverallCode()));
+      client.checkFulfilmentRateLimit(
+          RateLimiterClient.Domain.RH,
+          product,
+          CaseType.HH,
+          ipAddress,
+          new UniquePropertyReferenceNumber("24234234"),
+          telNo);
+      actualHttpStatus = HttpStatus.OK;
 
     } catch (ResponseStatusException e) {
       actualHttpStatus = e.getStatus();
@@ -174,11 +189,9 @@ public class RateLimiterClient_IT {
     HttpStatus actualHttpStatus;
     try {
       // Get client to call /json endpoint
-      RateLimitResponse response =
-          client.checkWebformRateLimit(RateLimiterClient.Domain.RH, "100.233.73.101");
+      client.checkWebformRateLimit(RateLimiterClient.Domain.RH, "100.233.73.101");
       System.out.println("Response:");
-      System.out.println(convertToJson(response));
-      actualHttpStatus = HttpStatus.valueOf(Integer.parseInt(response.getOverallCode()));
+      actualHttpStatus = HttpStatus.OK;
 
     } catch (ResponseStatusException e) {
       actualHttpStatus = e.getStatus();
@@ -189,9 +202,5 @@ public class RateLimiterClient_IT {
 
     assertEquals(expectedHttpStatus, actualHttpStatus);
     System.out.println();
-  }
-
-  private String convertToJson(Object o) throws JsonProcessingException {
-    return objectMapper.writeValueAsString(o);
   }
 }
