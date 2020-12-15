@@ -1,26 +1,32 @@
 package uk.gov.ons.ctp.integration.ratelimiterclient;
 
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.stubbing.Answer;
+import org.springframework.cloud.client.circuitbreaker.CircuitBreaker;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.ons.ctp.common.FixtureHelper;
 import uk.gov.ons.ctp.common.error.CTPException;
-import uk.gov.ons.ctp.common.error.CTPException.Fault;
 import uk.gov.ons.ctp.common.rest.RestClient;
 import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient;
 import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient.Domain;
@@ -34,10 +40,19 @@ import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
 public class RateLimiterClientWebformTest {
 
   @Mock RestClient restClient;
+  @Mock private CircuitBreaker circuitBreaker;
 
-  @InjectMocks RateLimiterClient rateLimiterClient = new RateLimiterClient(restClient);
+  @InjectMocks
+  RateLimiterClient rateLimiterClient = new RateLimiterClient(restClient, circuitBreaker);
+
+  @Mock private CallNotPermittedException circuitBreakerOpenException;
 
   private Domain domain = RateLimiterClient.Domain.RH;
+
+  @Before
+  public void setUp() {
+    simulateCircuitBreaker();
+  }
 
   @Test
   public void checkWebformRateLimit_nullDomain() {
@@ -52,8 +67,7 @@ public class RateLimiterClientWebformTest {
 
   @Test
   public void checkWebformRateLimit_nullClientIP() throws ResponseStatusException, CTPException {
-    RateLimitResponse response = rateLimiterClient.checkWebformRateLimit(domain, null);
-    assertNull(response);
+    rateLimiterClient.checkWebformRateLimit(domain, null);
   }
 
   @Test
@@ -69,15 +83,12 @@ public class RateLimiterClientWebformTest {
 
   @Test
   public void checkWebformRateLimit_belowThreshold() throws CTPException {
-    // Rate limiter is going to be happy with limit request
-    RateLimitResponse fakeResponse = new RateLimitResponse();
-    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class), eq("")))
-        .thenReturn(fakeResponse);
+    // Don't need to mock the call to restClient.postResource() as default is treated as being below
+    // the limit
 
     // Run test
     String ipAddress = "123.123.123.123";
-    RateLimitResponse response = rateLimiterClient.checkWebformRateLimit(domain, ipAddress);
-    assertEquals(fakeResponse, response);
+    rateLimiterClient.checkWebformRateLimit(domain, ipAddress);
 
     // Grab the request sent to the limiter
     ArgumentCaptor<RateLimitRequest> limitRequestCaptor =
@@ -99,7 +110,7 @@ public class RateLimiterClientWebformTest {
     String tooManyRequestsString = new ObjectMapper().writeValueAsString(tooManyRequestsDTO);
     ResponseStatusException failureException =
         new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, tooManyRequestsString, null);
-    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class), eq("")))
+    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class)))
         .thenThrow(failureException);
 
     // Confirm that limiter request fails with a 429 exception
@@ -121,17 +132,12 @@ public class RateLimiterClientWebformTest {
     String tooManyRequestsString = new ObjectMapper().writeValueAsString(repsonseDTO);
     ResponseStatusException failureException =
         new ResponseStatusException(HttpStatus.BAD_REQUEST, tooManyRequestsString, null);
-    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class), eq("")))
+    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class)))
         .thenThrow(failureException);
 
-    // Confirm that limiter request fails with expected CTPException
-    try {
-      rateLimiterClient.checkWebformRateLimit(domain, "11.134.234.64");
-      fail();
-    } catch (CTPException e) {
-      assertEquals(failureException, e.getCause());
-      assertEquals(Fault.SYSTEM_ERROR, e.getFault());
-    }
+    // Circuit breaker spots that this isn't a TOO_MANY_REQUESTS HttpStatus failure, so
+    // we log an error and allow the limit check to pass. ie, no exception thrown
+    rateLimiterClient.checkWebformRateLimit(domain, "11.134.234.64");
   }
 
   @Test
@@ -141,17 +147,22 @@ public class RateLimiterClientWebformTest {
     String corruptedJson = "aoeu<.p#$%^EOUAEOU3245";
     ResponseStatusException failureException =
         new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, corruptedJson, null);
-    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class), eq("")))
+    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class)))
         .thenThrow(failureException);
 
-    // Confirm that limiter request fails with a CTPException
-    try {
-      rateLimiterClient.checkWebformRateLimit(domain, "11.134.234.64");
-      fail();
-    } catch (CTPException e) {
-      assertTrue(e.getMessage().contains("Failed to parse"));
-      assertEquals(Fault.SYSTEM_ERROR, e.getFault());
-    }
+    // Although the rest client call fails the circuit breaker allows the limit check to pass. ie,
+    // no exception thrown
+    rateLimiterClient.checkWebformRateLimit(domain, "11.134.234.64");
+  }
+
+  @Test
+  public void checkWebformRateLimit_worksWithCircuitBreakerOpen() throws Exception {
+    // Simulate circuit breaker not calling rest client
+    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class)))
+        .thenThrow(circuitBreakerOpenException);
+
+    // Limit check works without an exception
+    rateLimiterClient.checkWebformRateLimit(domain, "11.134.234.64");
   }
 
   private void verifyDescriptor(
@@ -167,5 +178,30 @@ public class RateLimiterClientWebformTest {
     DescriptorEntry entry = descriptor.getEntries().get(index);
     assertEquals(expectedKey, entry.getKey());
     assertEquals(expectedValue, entry.getValue());
+  }
+
+  private void simulateCircuitBreaker() {
+    doAnswer(
+            new Answer<Object>() {
+              @SuppressWarnings("unchecked")
+              @Override
+              public Object answer(InvocationOnMock invocation) throws Throwable {
+                Object[] args = invocation.getArguments();
+                Supplier<Object> runner = (Supplier<Object>) args[0];
+                Function<Throwable, Object> fallback = (Function<Throwable, Object>) args[1];
+
+                try {
+                  // execute the circuitBreaker.run first argument (the Supplier for the code you
+                  // want to run)
+                  return runner.get();
+                } catch (Throwable t) {
+                  // execute the circuitBreaker.run second argument (the fallback Function)
+                  fallback.apply(t);
+                }
+                return null;
+              }
+            })
+        .when(circuitBreaker)
+        .run(any(), any());
   }
 }

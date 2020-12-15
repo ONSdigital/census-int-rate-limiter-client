@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.godaddy.logging.Logger;
 import com.godaddy.logging.LoggerFactory;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.cloud.client.circuitbreaker.CircuitBreaker;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.ons.ctp.common.domain.CaseType;
@@ -66,11 +68,13 @@ public class RateLimiterClient {
   private static final String RATE_LIMITER_QUERY_PATH = "/json";
 
   private RestClient envoyLimiterRestClient;
+  private CircuitBreaker circuitBreaker;
   private ObjectMapper objectMapper = new ObjectMapper();
 
-  public RateLimiterClient(RestClient envoyLimiterRestClient) {
+  public RateLimiterClient(RestClient envoyLimiterRestClient, CircuitBreaker circuitBreaker) {
     super();
     this.envoyLimiterRestClient = envoyLimiterRestClient;
+    this.circuitBreaker = circuitBreaker;
 
     this.objectMapper = new ObjectMapper();
     this.objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
@@ -79,11 +83,11 @@ public class RateLimiterClient {
   /**
    * Send fulfilment limit request to the limiter.
    *
-   * <p>If no limit has been breached then this method returns. If there is an internal error or if
+   * <p>If no limit has been breached then this method returns. If there is a validation error or if
    * a limit is breached then an exception is thrown.
    *
    * <p>All arguments must be non null and not empty, with the exception of the phone number which
-   * can be null if not known.
+   * can be null if not known, and the ipAddress which can be null.
    *
    * @param domain is the domain to query against. This value is mandatory.
    * @param product is the product used by the caller. This value is mandatory.
@@ -93,13 +97,12 @@ public class RateLimiterClient {
    * @param uprn is the uprn to limit requests against. This value is mandatory.
    * @param telNo is the end users telephone number. This value can be null, but if supplied then it
    *     cannot be an empty string.
-   * @return The response from the rate limiter.
-   * @throws CTPException if there is a processing error or if an invalid argument is supplied.
-   * @throws ResponseStatusException if the request to the limiter didn't return a 200. If a limit
-   *     has been breached then the exception status will be HttpStatus.TOO_MANY_REQUESTS and the
-   *     exception's reason field will contain the limiters json response.
+   * @throws CTPException if an invalid argument is supplied.
+   * @throws ResponseStatusException if the request limit has been breached. In this case the
+   *     exception status will be HttpStatus.TOO_MANY_REQUESTS and the exception's reason field will
+   *     contain the limiters json response.
    */
-  public RateLimitResponse checkFulfilmentRateLimit(
+  public void checkFulfilmentRateLimit(
       Domain domain,
       Product product,
       CaseType caseType,
@@ -140,54 +143,25 @@ public class RateLimiterClient {
     RateLimitRequest request = createRateLimitRequestForFulfilment(domain, params);
     log.with(request).debug("RateLimiterRequest for fulfilment");
 
-    // Send request to limiter, with detailed logging if we breached a limit
-    RateLimitResponse response;
-    try {
-      response =
-          envoyLimiterRestClient.postResource(
-              RATE_LIMITER_QUERY_PATH, request, RateLimitResponse.class, "");
-
-    } catch (ResponseStatusException limiterException) {
-      HttpStatus httpStatus = limiterException.getStatus();
-      if (httpStatus == HttpStatus.TOO_MANY_REQUESTS) {
-        // An expected failure scenario. Record the breach and make sure caller
-        // knows by re-throwing the exception
-        String breachDescription = describeLimitBreach(request, limiterException);
-        log.info(breachDescription.toString());
-        throw limiterException;
-      } else {
-        // Something unexpected went wrong
-        log.warn("Limiter request for fulfilments failed");
-        throw new CTPException(
-            Fault.SYSTEM_ERROR,
-            limiterException,
-            "POST request to limiter (for fulfilments) failed with http status: "
-                + httpStatus.value()
-                + "("
-                + httpStatus.name()
-                + ")");
-      }
-    }
-
-    return response;
+    // Send request to limiter
+    invokeRateLimiter("fulfilments", request);
   }
 
   /**
    * Send webform limit request to the limiter.
    *
-   * <p>If no limit has been breached then this method returns. If there is an internal error or if
+   * <p>If no limit has been breached then this method returns. If there is a validation error or if
    * a limit is breached then an exception is thrown.
    *
    * @param domain is the domain to query against. This value is mandatory.
    * @param ipAddress is the end users ip address. This value can be null, but if supplied then it
    *     cannot be an empty string.
-   * @return The response from the rate limiter, or null if the rate limiter was not called.
-   * @throws CTPException if there is a processing error or if an invalid argument is supplied.
-   * @throws ResponseStatusException if the request to the limiter didn't return a 200. If a limit
-   *     has been breached then the exception status will be HttpStatus.TOO_MANY_REQUESTS and the
-   *     exception's reason field will contain the limiters json response.
+   * @throws CTPException if there is an invalid argument is supplied.
+   * @throws ResponseStatusException if the request limit has been breached. In this case the
+   *     exception status will be HttpStatus.TOO_MANY_REQUESTS and the exception's reason field will
+   *     contain the limiters json response.
    */
-  public RateLimitResponse checkWebformRateLimit(Domain domain, String ipAddress)
+  public void checkWebformRateLimit(Domain domain, String ipAddress)
       throws CTPException, ResponseStatusException {
 
     // Fail if caller doesn't meet interface requirements
@@ -198,8 +172,8 @@ public class RateLimiterClient {
 
     // Skip check if RHUI has not been able to get the clients IP address
     if (ipAddress == null) {
-      log.debug("Not calling rate limiter");
-      return null;
+      log.debug("No IP Address. Not calling rate limiter");
+      return;
     }
 
     // Make it easy to access limiter parameters by adding to a hashmap
@@ -211,36 +185,8 @@ public class RateLimiterClient {
     RateLimitRequest request = createWebformRateLimitRequest(domain, params);
     log.with(request).debug("RateLimiterRequest for Webform");
 
-    // Send request to limiter, with detailed logging if we breached a limit
-    RateLimitResponse response;
-    try {
-      response =
-          envoyLimiterRestClient.postResource(
-              RATE_LIMITER_QUERY_PATH, request, RateLimitResponse.class, "");
-
-    } catch (ResponseStatusException limiterException) {
-      HttpStatus httpStatus = limiterException.getStatus();
-      if (httpStatus == HttpStatus.TOO_MANY_REQUESTS) {
-        // An expected failure scenario. Record the breach and make sure caller
-        // knows by re-throwing the exception
-        String breachDescription = describeLimitBreach(request, limiterException);
-        log.info(breachDescription.toString());
-        throw limiterException;
-      } else {
-        // Something unexpected went wrong
-        log.warn("Limiter request for Webform failed");
-        throw new CTPException(
-            Fault.SYSTEM_ERROR,
-            limiterException,
-            "POST request to limiter (for Webform) failed with http status: "
-                + httpStatus.value()
-                + "("
-                + httpStatus.name()
-                + ")");
-      }
-    }
-
-    return response;
+    // Send request to limiter
+    invokeRateLimiter("fulfilments", request);
   }
 
   // Throws CTPException is the argument is null
@@ -305,6 +251,88 @@ public class RateLimiterClient {
     limitDescriptor.setEntries(entries);
 
     return limitDescriptor;
+  }
+
+  /**
+   * Call the rate limiter using a circuit breaker. This will return without exception if 1) the
+   * request is within the rate limits, or 2) the call to the rate limiter fails in some way, or 3)
+   * due to previous failures the circuit breaker is 'open'. If the request is above the rate limits
+   * then a ResponseStatusException is thrown.
+   */
+  private void invokeRateLimiter(String requestDescription, RateLimitRequest request) {
+    ResponseStatusException limitException =
+        circuitBreaker.run(
+            () -> {
+              try {
+                doInvokeRateLimiter(requestDescription, request);
+                return null;
+              } catch (CTPException e) {
+                // we should get here if the rate-limiter is failing or not communicating
+                // ... wrap and rethrow to be handled by the circuit-breaker
+                throw new RuntimeException(e);
+              } catch (ResponseStatusException e) {
+                // we have got a 429 but don't rethrow it otherwise this will count against
+                // the circuit-breaker accounting, so instead we return it to later throw
+                // outside the circuit-breaker mechanism.
+                return e;
+              }
+            },
+            throwable -> {
+              // This is the Function for the circuitBreaker.run second parameter, which is called
+              // when an exception is thrown from the first Supplier parameter (above), including
+              // as part of the processing of being in the circuit-breaker OPEN state.
+              //
+              // It is OK to carry on, since it is better to tolerate limiter error than fail
+              // operation, however by getting here, the circuit-breaker has counted the failure,
+              // or we are in circuit-breaker OPEN state.
+              if (throwable instanceof CallNotPermittedException) {
+                log.info("Circuit breaker is OPEN calling rate limiter for " + requestDescription);
+              } else {
+                log.with("error", throwable.getMessage())
+                    .error(throwable, "Rate limiter failure for " + requestDescription);
+              }
+              return null;
+            });
+
+    if (limitException != null) {
+      throw limitException;
+    }
+  }
+
+  /** Make the rest call to the limiter */
+  private RateLimitResponse doInvokeRateLimiter(String requestDescription, RateLimitRequest request)
+      throws CTPException {
+    RateLimitResponse response;
+    try {
+      response =
+          envoyLimiterRestClient.postResource(
+              RATE_LIMITER_QUERY_PATH, request, RateLimitResponse.class);
+
+    } catch (ResponseStatusException limiterException) {
+      HttpStatus httpStatus = limiterException.getStatus();
+      if (httpStatus == HttpStatus.TOO_MANY_REQUESTS) {
+        // An expected failure scenario. Record the breach and make sure caller
+        // knows by re-throwing the exception
+        String breachDescription = describeLimitBreach(request, limiterException);
+        log.info(breachDescription.toString());
+        throw limiterException;
+      } else {
+        // Something unexpected went wrong
+        log.warn("Limiter request for " + requestDescription + " failed");
+        throw new CTPException(
+            Fault.SYSTEM_ERROR,
+            limiterException,
+            "POST request to limiter (for "
+                + requestDescription
+                + ") failed with http status: "
+                + httpStatus.value()
+                + "("
+                + httpStatus.name()
+                + ")");
+      }
+    }
+
+    return response;
   }
 
   // Builds a String which lists the LimitDescriptor(s) that triggered a limit breach
