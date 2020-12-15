@@ -190,13 +190,11 @@ public class RateLimiterClient_IT {
     try {
       // Get client to call /json endpoint
       client.checkWebformRateLimit(RateLimiterClient.Domain.RH, "100.233.73.101");
-      System.out.println("Response:");
       actualHttpStatus = HttpStatus.OK;
 
     } catch (ResponseStatusException e) {
       actualHttpStatus = e.getStatus();
       System.out.println("invokeWebformRateLimitCheck: Caught exception: " + actualHttpStatus);
-      System.out.println("Response:");
       System.out.println(e.getReason());
     }
 
