@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.junit.Before;
@@ -45,6 +46,8 @@ public class RateLimiterClientFulfilmentTest {
 
   @Mock RestClient restClient;
   @Mock private CircuitBreaker circuitBreaker;
+
+  @Mock private CallNotPermittedException circuitBreakerOpenException;
 
   @InjectMocks
   RateLimiterClient rateLimiterClient = new RateLimiterClient(restClient, circuitBreaker);
@@ -113,7 +116,7 @@ public class RateLimiterClientFulfilmentTest {
     String tooManyRequestsString = new ObjectMapper().writeValueAsString(tooManyRequestsDTO);
     ResponseStatusException failureException =
         new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, tooManyRequestsString, null);
-    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class), eq("")))
+    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class)))
         .thenThrow(failureException);
 
     // Confirm that limiter request fails with a 429 exception
@@ -137,7 +140,7 @@ public class RateLimiterClientFulfilmentTest {
     String tooManyRequestsString = new ObjectMapper().writeValueAsString(repsonseDTO);
     ResponseStatusException failureException =
         new ResponseStatusException(HttpStatus.BAD_REQUEST, tooManyRequestsString, null);
-    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class), eq("")))
+    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class)))
         .thenThrow(failureException);
 
     // Circuit breaker spots that this isn't a TOO_MANY_REQUESTS HttpStatus failure, so
@@ -152,11 +155,21 @@ public class RateLimiterClientFulfilmentTest {
     String corruptedJson = "aoeu<.p#$%^EOUAEOU3245";
     ResponseStatusException failureException =
         new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, corruptedJson, null);
-    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class), eq("")))
+    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class)))
         .thenThrow(failureException);
 
     // Although the rest client call fails the circuit breaker allows the limit check to pass. ie,
     // no exception thrown
+    rateLimiterClient.checkFulfilmentRateLimit(domain, product, caseType, null, uprn, null);
+  }
+
+  @Test
+  public void checkFulfilmentRateLimit_worksWithCircuitBreakerOpen() throws Exception {
+    // Simulate circuit breaker not calling rest client
+    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class)))
+        .thenThrow(circuitBreakerOpenException);
+
+    // Limit check works without an exception
     rateLimiterClient.checkFulfilmentRateLimit(domain, product, caseType, null, uprn, null);
   }
 

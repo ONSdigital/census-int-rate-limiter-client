@@ -31,7 +31,7 @@ import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient;
  *
  * <p>The hostname of the limiter should be set in the LIMITER_HOST environment variable. If this
  * environment variable is not set then the program doesn't do anything (and will therefore 'pass'
- * the test)
+ * the test). For running on a development machine set this to 'localhost'.
  */
 public class RateLimiterClient_IT {
   private String limiterHost;

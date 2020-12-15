@@ -306,7 +306,7 @@ public class RateLimiterClient {
     try {
       response =
           envoyLimiterRestClient.postResource(
-              RATE_LIMITER_QUERY_PATH, request, RateLimitResponse.class, "");
+              RATE_LIMITER_QUERY_PATH, request, RateLimitResponse.class);
 
     } catch (ResponseStatusException limiterException) {
       HttpStatus httpStatus = limiterException.getStatus();
