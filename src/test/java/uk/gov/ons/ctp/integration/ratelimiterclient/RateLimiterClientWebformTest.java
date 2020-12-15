@@ -18,7 +18,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
@@ -49,8 +48,6 @@ public class RateLimiterClientWebformTest {
 
   @Before
   public void setUp() {
-    MockitoAnnotations.initMocks(this);
-
     simulateCircuitBreaker();
   }
 
