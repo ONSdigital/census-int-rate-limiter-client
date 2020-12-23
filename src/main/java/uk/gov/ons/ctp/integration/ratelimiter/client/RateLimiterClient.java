@@ -189,6 +189,9 @@ public class RateLimiterClient {
     invokeRateLimiter("fulfilments", request);
   }
 
+  public void checkEqLaunchLimit(Domain domain, int modulo)
+      throws CTPException, ResponseStatusException {}
+
   // Throws CTPException is the argument is null
   private void verifyArgumentSupplied(String argName, Object argValue) throws CTPException {
     if (argValue == null) {
