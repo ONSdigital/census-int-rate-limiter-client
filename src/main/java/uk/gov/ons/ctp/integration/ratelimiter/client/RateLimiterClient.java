@@ -48,6 +48,7 @@ public class RateLimiterClient {
   private static final String DESC_UPRN = "uprn";
   private static final String DESC_TEL_NO = "telNo";
   private static final String DESC_REQUEST = "request";
+  private static final String DESC_MODULO = "modulo";
 
   // Lists of descriptors to be sent to the limiter. Fulfilment requests only.
   private static String[] DESCRIPTORS_WITH_UPRN = {
@@ -62,8 +63,8 @@ public class RateLimiterClient {
     DESC_DELIVERY_CHANNEL, DESC_IP_ADDRESS
   };
 
-  // Descriptors used to build limit request for webform
   private static String[] DESCRIPTORS_WEBFORM = {DESC_REQUEST, DESC_IP_ADDRESS};
+  private static String[] DESCRIPTORS_EQ_LAUNCH = {DESC_REQUEST, DESC_MODULO};
 
   private static final String RATE_LIMITER_QUERY_PATH = "/json";
 
@@ -167,12 +168,9 @@ public class RateLimiterClient {
     // Fail if caller doesn't meet interface requirements
     verifyArgumentSupplied("domain", domain);
     verifyArgumentNotEmpty("ipAddress", ipAddress);
-
     log.with("ipAddress", ipAddress).info("Check webform rate limit");
 
-    // Skip check if RHUI has not been able to get the clients IP address
-    if (ipAddress == null) {
-      log.debug("No IP Address. Not calling rate limiter");
+    if (skipRateLimitCheck(ipAddress)) {
       return;
     }
 
@@ -182,15 +180,48 @@ public class RateLimiterClient {
     params.put(DESC_IP_ADDRESS, ipAddress);
 
     // Create request
-    RateLimitRequest request = createWebformRateLimitRequest(domain, params);
+    RateLimitRequest request =
+        createRateLimitRequestWithAllDescriptors(domain, params, DESCRIPTORS_WEBFORM);
     log.with(request).debug("RateLimiterRequest for Webform");
 
     // Send request to limiter
-    invokeRateLimiter("fulfilments", request);
+    invokeRateLimiter("webform", request);
   }
 
-  public void checkEqLaunchLimit(Domain domain, int modulo)
-      throws CTPException, ResponseStatusException {}
+  public void checkEqLaunchLimit(Domain domain, String ipAddress, int loadSheddingModulus)
+      throws CTPException, ResponseStatusException {
+    verifyArgumentNotEmpty("ipAddress", ipAddress);
+
+    if (skipRateLimitCheck(ipAddress)) {
+      return;
+    }
+    log.with("ipAddress", ipAddress)
+        .with("loadSheddingModulus", loadSheddingModulus)
+        .info("Check EQ Launch limit");
+
+    Integer modulo = lastOctet(ipAddress) % loadSheddingModulus;
+
+    var params = new HashMap<String, String>();
+    params.put(DESC_REQUEST, "EQLAUNCH");
+    params.put(DESC_MODULO, modulo.toString());
+
+    RateLimitRequest request =
+        createRateLimitRequestWithAllDescriptors(domain, params, DESCRIPTORS_EQ_LAUNCH);
+    log.with(request).debug("RateLimiterRequest for EQ Launch");
+
+    invokeRateLimiter("EQ Launch", request);
+  }
+
+  Integer lastOctet(String ipAddress) {
+    return Integer.valueOf(ipAddress.substring(ipAddress.lastIndexOf('.') + 1));
+  }
+
+  private boolean skipRateLimitCheck(String ipAddress) throws CTPException {
+    if (ipAddress == null) {
+      log.debug("No IP Address. Not calling rate limiter");
+    }
+    return ipAddress == null;
+  }
 
   // Throws CTPException is the argument is null
   private void verifyArgumentSupplied(String argName, Object argValue) throws CTPException {
@@ -230,11 +261,11 @@ public class RateLimiterClient {
     return request;
   }
 
-  private RateLimitRequest createWebformRateLimitRequest(
-      Domain domain, Map<String, String> descriptorData) {
+  private RateLimitRequest createRateLimitRequestWithAllDescriptors(
+      Domain domain, Map<String, String> descriptorData, String[] descriptorNames) {
 
     List<LimitDescriptor> descriptors = new ArrayList<>();
-    descriptors.add(createLimitDescriptor(DESCRIPTORS_WEBFORM, descriptorData));
+    descriptors.add(createLimitDescriptor(descriptorNames, descriptorData));
 
     RateLimitRequest request =
         RateLimitRequest.builder().domain(domain.domainName).descriptors(descriptors).build();
@@ -242,10 +273,10 @@ public class RateLimiterClient {
   }
 
   private LimitDescriptor createLimitDescriptor(
-      String[] descriptorList, Map<String, String> descriptorData) {
+      String[] descriptorNames, Map<String, String> descriptorData) {
 
     List<DescriptorEntry> entries = new ArrayList<>();
-    for (String descriptorName : descriptorList) {
+    for (String descriptorName : descriptorNames) {
       String descriptorValue = descriptorData.get(descriptorName);
       entries.add(new DescriptorEntry(descriptorName, descriptorValue));
     }
