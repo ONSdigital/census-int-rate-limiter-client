@@ -24,7 +24,7 @@ public class RateLimiterClientWebformTest extends RateLimiterClientTestBase {
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkWebformRateLimit(null, "100.101.88.99");
+              rateLimiterClient.checkWebformRateLimit(null, AN_IPv4_ADDRESS);
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("'domain' cannot be null"));
   }
@@ -59,15 +59,14 @@ public class RateLimiterClientWebformTest extends RateLimiterClientTestBase {
     // the limit
 
     // Run test
-    String ipAddress = "123.123.123.123";
-    rateLimiterClient.checkWebformRateLimit(domain, ipAddress);
+    rateLimiterClient.checkWebformRateLimit(domain, AN_IPv4_ADDRESS);
 
     // Grab the request sent to the limiter
     RateLimitRequest request = verifiedRequestSentToLimiter();
 
     // Verify that the limit request contains a ipAddress based descriptor
     assertEquals(1, request.getDescriptors().size());
-    verifyDescriptor(request, 0, "ipAddress", ipAddress);
+    verifyDescriptor(request, 0, "ipAddress", AN_IPv4_ADDRESS);
   }
 
   @Test
@@ -79,7 +78,7 @@ public class RateLimiterClientWebformTest extends RateLimiterClientTestBase {
 
     // Confirm that limiter request fails with a 429 exception
     try {
-      rateLimiterClient.checkWebformRateLimit(domain, "123.111.222.23");
+      rateLimiterClient.checkWebformRateLimit(domain, AN_IPv4_ADDRESS);
       fail();
     } catch (ResponseStatusException e) {
       assertEquals(failureException, e);
@@ -96,7 +95,7 @@ public class RateLimiterClientWebformTest extends RateLimiterClientTestBase {
 
     // Circuit breaker spots that this isn't a TOO_MANY_REQUESTS HttpStatus failure, so
     // we log an error and allow the limit check to pass. ie, no exception thrown
-    rateLimiterClient.checkWebformRateLimit(domain, "11.134.234.64");
+    rateLimiterClient.checkWebformRateLimit(domain, AN_IPv4_ADDRESS);
     verifiedRequestSentToLimiter();
   }
 
@@ -108,7 +107,7 @@ public class RateLimiterClientWebformTest extends RateLimiterClientTestBase {
 
     // Although the rest client call fails the circuit breaker allows the limit check to pass. ie,
     // no exception thrown
-    rateLimiterClient.checkWebformRateLimit(domain, "11.134.234.64");
+    rateLimiterClient.checkWebformRateLimit(domain, AN_IPv4_ADDRESS);
     verifiedRequestSentToLimiter();
   }
 
@@ -118,7 +117,7 @@ public class RateLimiterClientWebformTest extends RateLimiterClientTestBase {
     mockRateLimitException(circuitBreakerOpenException);
 
     // Limit check works without an exception
-    rateLimiterClient.checkWebformRateLimit(domain, "11.134.234.64");
+    rateLimiterClient.checkWebformRateLimit(domain, AN_IPv4_ADDRESS);
   }
 
   private void verifyDescriptor(

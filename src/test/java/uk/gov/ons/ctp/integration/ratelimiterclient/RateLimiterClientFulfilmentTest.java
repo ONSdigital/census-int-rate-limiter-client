@@ -46,7 +46,7 @@ public class RateLimiterClientFulfilmentTest extends RateLimiterClientTestBase {
             CTPException.class,
             () -> {
               rateLimiterClient.checkFulfilmentRateLimit(
-                  null, product, caseType, "100.101.88.99", uprn, "0171 3434");
+                  null, product, caseType, AN_IPv4_ADDRESS, uprn, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("'domain' cannot be null"));
     verifyEnvoyLimiterNotCalled();
@@ -108,7 +108,7 @@ public class RateLimiterClientFulfilmentTest extends RateLimiterClientTestBase {
     // Confirm that limiter request fails with a 429 exception
     try {
       rateLimiterClient.checkFulfilmentRateLimit(
-          domain, product, caseType, "123.111.222.23", uprn, "0171 3434");
+          domain, product, caseType, AN_IPv4_ADDRESS, uprn, "0171 3434");
       fail();
     } catch (ResponseStatusException e) {
       assertEquals(failureException, e);
@@ -208,7 +208,7 @@ public class RateLimiterClientFulfilmentTest extends RateLimiterClientTestBase {
     // the limit
 
     String telNo = useTelNo ? "0123 3434333" : null;
-    String ipAddress = useIpAddress ? "123.123.123.123" : null;
+    String ipAddress = useIpAddress ? AN_IPv4_ADDRESS : null;
     rateLimiterClient.checkFulfilmentRateLimit(domain, product, caseType, ipAddress, uprn, telNo);
 
     // Grab the request sent to the limiter

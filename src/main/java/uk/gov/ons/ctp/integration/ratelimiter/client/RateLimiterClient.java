@@ -203,7 +203,7 @@ public class RateLimiterClient {
    * @param ipAddress is the end users IP address. If this is not a valid IPv4 address we skip the
    *     check.
    * @param loadSheddingModulus an integer for modulus calculations against the last octet of the IP
-   *     address.
+   *     address. This cannot be zero.
    * @throws CTPException if there is an invalid argument is supplied.
    * @throws ResponseStatusException if the request limit has been breached. In this case the
    *     exception status will be HttpStatus.TOO_MANY_REQUESTS and the exception's reason field will
@@ -212,6 +212,7 @@ public class RateLimiterClient {
   public void checkEqLaunchLimit(Domain domain, String ipAddress, int loadSheddingModulus)
       throws CTPException, ResponseStatusException {
     verifyArgumentSupplied("domain", domain);
+    verifyLoadSheddingModulus(loadSheddingModulus);
 
     if (!isValidIpAddress(ipAddress)) {
       return;
@@ -250,6 +251,12 @@ public class RateLimiterClient {
       valid = false;
     }
     return valid;
+  }
+
+  private void verifyLoadSheddingModulus(int loadSheddingModulus) throws CTPException {
+    if (loadSheddingModulus == 0) {
+      throw new CTPException(Fault.SYSTEM_ERROR, "Argument 'loadSheddingModulus' cannot be zero");
+    }
   }
 
   // Throws CTPException is the argument is null

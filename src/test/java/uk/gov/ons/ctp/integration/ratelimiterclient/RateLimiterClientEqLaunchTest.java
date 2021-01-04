@@ -23,9 +23,23 @@ public class RateLimiterClientEqLaunchTest extends RateLimiterClientTestBase {
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkEqLaunchLimit(null, "100.101.88.99", 10);
+              rateLimiterClient.checkEqLaunchLimit(null, AN_IPv4_ADDRESS, 10);
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("'domain' cannot be null"));
+    verifyEnvoyLimiterNotCalled();
+  }
+
+  @Test
+  public void shouldRejectZeroLoadSheddingModulus() {
+    CTPException exception =
+        assertThrows(
+            CTPException.class,
+            () -> {
+              rateLimiterClient.checkEqLaunchLimit(domain, AN_IPv4_ADDRESS, 0);
+            });
+    assertTrue(
+        exception.getMessage(),
+        exception.getMessage().contains("'loadSheddingModulus' cannot be zero"));
     verifyEnvoyLimiterNotCalled();
   }
 
@@ -97,7 +111,7 @@ public class RateLimiterClientEqLaunchTest extends RateLimiterClientTestBase {
 
     // Confirm that limiter request fails with a 429 exception
     try {
-      rateLimiterClient.checkEqLaunchLimit(domain, "123.111.222.23", 10);
+      rateLimiterClient.checkEqLaunchLimit(domain, AN_IPv4_ADDRESS, 10);
       fail();
     } catch (ResponseStatusException e) {
       assertEquals(failureException, e);
@@ -114,7 +128,7 @@ public class RateLimiterClientEqLaunchTest extends RateLimiterClientTestBase {
 
     // Circuit breaker spots that this isn't a TOO_MANY_REQUESTS HttpStatus failure, so
     // we log an error and allow the limit check to pass. ie, no exception thrown
-    rateLimiterClient.checkEqLaunchLimit(domain, "11.134.234.64", 10);
+    rateLimiterClient.checkEqLaunchLimit(domain, AN_IPv4_ADDRESS, 10);
     verifiedRequestSentToLimiter();
   }
 
@@ -126,7 +140,7 @@ public class RateLimiterClientEqLaunchTest extends RateLimiterClientTestBase {
 
     // Although the rest client call fails the circuit breaker allows the limit check to pass. ie,
     // no exception thrown
-    rateLimiterClient.checkEqLaunchLimit(domain, "11.134.234.64", 10);
+    rateLimiterClient.checkEqLaunchLimit(domain, AN_IPv4_ADDRESS, 10);
     verifiedRequestSentToLimiter();
   }
 
@@ -136,7 +150,7 @@ public class RateLimiterClientEqLaunchTest extends RateLimiterClientTestBase {
     mockRateLimitException(circuitBreakerOpenException);
 
     // Limit check works without an exception
-    rateLimiterClient.checkEqLaunchLimit(domain, "11.134.234.64", 10);
+    rateLimiterClient.checkEqLaunchLimit(domain, AN_IPv4_ADDRESS, 10);
   }
 
   private void verifyDescriptor(
