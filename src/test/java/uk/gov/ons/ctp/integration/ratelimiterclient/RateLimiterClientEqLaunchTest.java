@@ -14,64 +14,82 @@ import uk.gov.ons.ctp.common.error.CTPException;
 import uk.gov.ons.ctp.integration.ratelimiter.model.LimitDescriptor;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitRequest;
 
-/** This class contains unit tests for limit testing Webform requests. */
 @RunWith(MockitoJUnitRunner.class)
-public class RateLimiterClientWebformTest extends RateLimiterClientTestBase {
+public class RateLimiterClientEqLaunchTest extends RateLimiterClientTestBase {
 
   @Test
-  public void checkWebformRateLimit_nullDomain() {
+  public void shouldRejectNullDomain() {
     CTPException exception =
         assertThrows(
             CTPException.class,
             () -> {
-              rateLimiterClient.checkWebformRateLimit(null, "100.101.88.99");
+              rateLimiterClient.checkEqLaunchLimit(null, "100.101.88.99", 10);
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("'domain' cannot be null"));
+    verifyEnvoyLimiterNotCalled();
   }
 
   @Test
   public void shouldQuietlyAcceptNullClientIpNotCallingLimiter() throws Exception {
-    rateLimiterClient.checkWebformRateLimit(domain, null);
+    rateLimiterClient.checkEqLaunchLimit(domain, null, 10);
     verifyEnvoyLimiterNotCalled();
   }
 
   @Test
   public void shouldQuietlyAcceptEmptyClientIpNotCallingLimiter() throws Exception {
-    rateLimiterClient.checkWebformRateLimit(domain, "");
+    rateLimiterClient.checkEqLaunchLimit(domain, "", 10);
     verifyEnvoyLimiterNotCalled();
   }
 
   @Test
   public void shouldQuietlyAcceptBadlyFormattedClientIpNotCallingLimiter() throws Exception {
-    rateLimiterClient.checkWebformRateLimit(domain, "badlyformattedIpAddress");
+    rateLimiterClient.checkEqLaunchLimit(domain, "badlyformattedIpAddress", 10);
     verifyEnvoyLimiterNotCalled();
   }
 
   @Test
   public void shouldQuietlyAcceptIpV6ClientIpNotCallingLimiter() throws Exception {
-    rateLimiterClient.checkWebformRateLimit(domain, "2001:DB8::21f:5bff:febf:ce22:8a2e");
+    rateLimiterClient.checkEqLaunchLimit(domain, "2001:DB8::21f:5bff:febf:ce22:8a2e", 10);
     verifyEnvoyLimiterNotCalled();
   }
 
   @Test
-  public void checkWebformRateLimit_belowThreshold() throws CTPException {
-    // Don't need to mock the call to restClient.postResource() as default is treated as being below
-    // the limit
-
-    // Run test
-    String ipAddress = "123.123.123.123";
-    rateLimiterClient.checkWebformRateLimit(domain, ipAddress);
-
-    // Grab the request sent to the limiter
-    RateLimitRequest request = verifiedRequestSentToLimiter();
-
-    // Verify that the limit request contains a ipAddress based descriptor
-    assertEquals(1, request.getDescriptors().size());
-    verifyDescriptor(request, 0, "ipAddress", ipAddress);
+  public void shouldAcceptRateLimitBelowThreshold_modulo3() throws Exception {
+    doCheckAndVerifyModulo("124.125.126.123", 10, 3);
   }
 
   @Test
-  public void checkWebformRateLimit_aboveThreshold() throws Exception {
+  public void shouldAcceptRateLimitBelowThreshold_modulo4() throws Exception {
+    doCheckAndVerifyModulo("124.125.126.9", 5, 4);
+  }
+
+  @Test
+  public void shouldAcceptRateLimitBelowThreshold_modulo0() throws Exception {
+    doCheckAndVerifyModulo("124.125.126.100", 10, 0);
+  }
+
+  @Test
+  public void shouldAcceptRateLimitBelowThreshold_modulo9() throws Exception {
+    doCheckAndVerifyModulo("124.125.126.249", 15, 9);
+  }
+
+  @Test
+  public void shouldAcceptRateLimitBelowThreshold_modulo19() throws Exception {
+    doCheckAndVerifyModulo("124.125.126.249", 23, 19);
+  }
+
+  private void doCheckAndVerifyModulo(String ipAddress, int loadSheddingModulus, int expectedModulo)
+      throws Exception {
+    rateLimiterClient.checkEqLaunchLimit(domain, ipAddress, loadSheddingModulus);
+
+    RateLimitRequest request = verifiedRequestSentToLimiter();
+
+    assertEquals(1, request.getDescriptors().size());
+    verifyDescriptor(request, 0, "modulo", "" + expectedModulo);
+  }
+
+  @Test
+  public void shouldRateLimitAboveThreshold() throws Exception {
     // Limit request is going to fail with exception. This needs to contain a string with the
     // limiters too-many-requests response
     ResponseStatusException failureException = overTheLimitException();
@@ -79,7 +97,7 @@ public class RateLimiterClientWebformTest extends RateLimiterClientTestBase {
 
     // Confirm that limiter request fails with a 429 exception
     try {
-      rateLimiterClient.checkWebformRateLimit(domain, "123.111.222.23");
+      rateLimiterClient.checkEqLaunchLimit(domain, "123.111.222.23", 10);
       fail();
     } catch (ResponseStatusException e) {
       assertEquals(failureException, e);
@@ -89,43 +107,43 @@ public class RateLimiterClientWebformTest extends RateLimiterClientTestBase {
   }
 
   @Test
-  public void checkWebformRateLimit_limiterOtherError() throws Exception {
+  public void shouldQuietlyAcceptOtherRateLimiterError() throws Exception {
     // Limit request is going to fail with exception that simulates an unexpected error from the
     // limiter. ie, http response status is neither an expected 200 or 429
     mockRateLimitException(badRequestException());
 
     // Circuit breaker spots that this isn't a TOO_MANY_REQUESTS HttpStatus failure, so
     // we log an error and allow the limit check to pass. ie, no exception thrown
-    rateLimiterClient.checkWebformRateLimit(domain, "11.134.234.64");
+    rateLimiterClient.checkEqLaunchLimit(domain, "11.134.234.64", 10);
     verifiedRequestSentToLimiter();
   }
 
   @Test
-  public void checkWebformRateLimit_corruptedLimiterJson() throws Exception {
+  public void shouldQuietlyAcceptCorruptedJsonResponseFromRateLimiter() throws Exception {
     // This test simulates an internal error in which the call to the limiter has responded
     // with a 429 but the response JSon has somehow been corrupted
     mockRateLimitException(corruptedJsonException());
 
     // Although the rest client call fails the circuit breaker allows the limit check to pass. ie,
     // no exception thrown
-    rateLimiterClient.checkWebformRateLimit(domain, "11.134.234.64");
+    rateLimiterClient.checkEqLaunchLimit(domain, "11.134.234.64", 10);
     verifiedRequestSentToLimiter();
   }
 
   @Test
-  public void checkWebformRateLimit_worksWithCircuitBreakerOpen() throws Exception {
+  public void shouldWorksWithCircuitBreakerOpen() throws Exception {
     // Simulate circuit breaker not calling rest client
     mockRateLimitException(circuitBreakerOpenException);
 
     // Limit check works without an exception
-    rateLimiterClient.checkWebformRateLimit(domain, "11.134.234.64");
+    rateLimiterClient.checkEqLaunchLimit(domain, "11.134.234.64", 10);
   }
 
   private void verifyDescriptor(
       RateLimitRequest request, int index, String finalKeyName, String finalKeyValue) {
     LimitDescriptor descriptor = request.getDescriptors().get(index);
     assertEquals(2, descriptor.getEntries().size());
-    verifyEntry(descriptor, 0, "request", "WEBFORM");
+    verifyEntry(descriptor, 0, "request", "EQLAUNCH");
     verifyEntry(descriptor, 1, finalKeyName, finalKeyValue);
   }
 }

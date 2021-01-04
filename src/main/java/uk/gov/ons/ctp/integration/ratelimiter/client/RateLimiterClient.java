@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.validator.routines.InetAddressValidator;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreaker;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -93,8 +95,8 @@ public class RateLimiterClient {
    * @param domain is the domain to query against. This value is mandatory.
    * @param product is the product used by the caller. This value is mandatory.
    * @param caseType is the case type for the current request. This value is mandatory.
-   * @param ipAddress is the end users ip address. This value can be null, but if supplied then it
-   *     cannot be an empty string.
+   * @param ipAddress is the end users ip address. If this is not a valid IPv4 address we skip the
+   *     check.
    * @param uprn is the uprn to limit requests against. This value is mandatory.
    * @param telNo is the end users telephone number. This value can be null, but if supplied then it
    *     cannot be an empty string.
@@ -116,9 +118,12 @@ public class RateLimiterClient {
     verifyArgumentSupplied("domain", domain);
     verifyArgumentSupplied("product", product);
     verifyArgumentSupplied("caseType", caseType);
-    verifyArgumentNotEmpty("ipAddress", ipAddress);
     verifyArgumentSupplied("uprn", uprn);
     verifyArgumentNotEmpty("telNo", telNo);
+
+    if (!isValidIpAddress(ipAddress)) {
+      ipAddress = null;
+    }
 
     log.with("domain", domain.domainName)
         .with("productGroup", product.getProductGroup().name())
@@ -155,8 +160,8 @@ public class RateLimiterClient {
    * a limit is breached then an exception is thrown.
    *
    * @param domain is the domain to query against. This value is mandatory.
-   * @param ipAddress is the end users ip address. This value can be null, but if supplied then it
-   *     cannot be an empty string.
+   * @param ipAddress is the end users ip address. If this is not a valid IPv4 address we skip the
+   *     check.
    * @throws CTPException if there is an invalid argument is supplied.
    * @throws ResponseStatusException if the request limit has been breached. In this case the
    *     exception status will be HttpStatus.TOO_MANY_REQUESTS and the exception's reason field will
@@ -167,12 +172,12 @@ public class RateLimiterClient {
 
     // Fail if caller doesn't meet interface requirements
     verifyArgumentSupplied("domain", domain);
-    verifyArgumentNotEmpty("ipAddress", ipAddress);
-    log.with("ipAddress", ipAddress).info("Check webform rate limit");
 
-    if (skipRateLimitCheck(ipAddress)) {
+    if (!isValidIpAddress(ipAddress)) {
       return;
     }
+
+    log.with("ipAddress", ipAddress).info("Check webform rate limit");
 
     // Make it easy to access limiter parameters by adding to a hashmap
     Map<String, String> params = new HashMap<String, String>();
@@ -190,9 +195,9 @@ public class RateLimiterClient {
 
   public void checkEqLaunchLimit(Domain domain, String ipAddress, int loadSheddingModulus)
       throws CTPException, ResponseStatusException {
-    verifyArgumentNotEmpty("ipAddress", ipAddress);
+    verifyArgumentSupplied("domain", domain);
 
-    if (skipRateLimitCheck(ipAddress)) {
+    if (!isValidIpAddress(ipAddress)) {
       return;
     }
     log.with("ipAddress", ipAddress)
@@ -212,15 +217,23 @@ public class RateLimiterClient {
     invokeRateLimiter("EQ Launch", request);
   }
 
-  Integer lastOctet(String ipAddress) {
+  private Integer lastOctet(String ipAddress) {
     return Integer.valueOf(ipAddress.substring(ipAddress.lastIndexOf('.') + 1));
   }
 
-  private boolean skipRateLimitCheck(String ipAddress) throws CTPException {
-    if (ipAddress == null) {
-      log.debug("No IP Address. Not calling rate limiter");
+  private boolean isValidIpAddress(String ipAddress) throws CTPException {
+    boolean valid = true;
+    if (StringUtils.isBlank(ipAddress)) {
+      log.with("ipAddress", ipAddress)
+          .warn("Cannot accept blank IP address. This will not be used for rate limit check");
+      valid = false;
     }
-    return ipAddress == null;
+    if (!InetAddressValidator.getInstance().isValidInet4Address(ipAddress)) {
+      log.with("ipAddress", ipAddress)
+          .warn("IP address is not valid IPv4 format. This will not be used for rate limit check");
+      valid = false;
+    }
+    return valid;
   }
 
   // Throws CTPException is the argument is null
