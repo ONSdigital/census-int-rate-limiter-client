@@ -95,8 +95,8 @@ public class RateLimiterClient {
    * @param domain is the domain to query against. This value is mandatory.
    * @param product is the product used by the caller. This value is mandatory.
    * @param caseType is the case type for the current request. This value is mandatory.
-   * @param ipAddress is the end users ip address. If this is not a valid IPv4 address we skip the
-   *     check.
+   * @param ipAddress is the end users IP address. If this is not a valid IPv4 address we do not add
+   *     it to the rate limit descriptors.
    * @param uprn is the uprn to limit requests against. This value is mandatory.
    * @param telNo is the end users telephone number. This value can be null, but if supplied then it
    *     cannot be an empty string.
@@ -160,7 +160,7 @@ public class RateLimiterClient {
    * a limit is breached then an exception is thrown.
    *
    * @param domain is the domain to query against. This value is mandatory.
-   * @param ipAddress is the end users ip address. If this is not a valid IPv4 address we skip the
+   * @param ipAddress is the end users IP address. If this is not a valid IPv4 address we skip the
    *     check.
    * @throws CTPException if there is an invalid argument is supplied.
    * @throws ResponseStatusException if the request limit has been breached. In this case the
@@ -193,6 +193,22 @@ public class RateLimiterClient {
     invokeRateLimiter("webform", request);
   }
 
+  /**
+   * Send EQ Launch rate limit request to the limiter.
+   *
+   * <p>If no limit has been breached then this method returns. If there is a validation error or if
+   * a limit is breached then an exception is thrown.
+   *
+   * @param domain is the domain to query against. This value is mandatory.
+   * @param ipAddress is the end users IP address. If this is not a valid IPv4 address we skip the
+   *     check.
+   * @param loadSheddingModulus an integer for modulus calculations against the last octet of the IP
+   *     address.
+   * @throws CTPException if there is an invalid argument is supplied.
+   * @throws ResponseStatusException if the request limit has been breached. In this case the
+   *     exception status will be HttpStatus.TOO_MANY_REQUESTS and the exception's reason field will
+   *     contain the limiters json response.
+   */
   public void checkEqLaunchLimit(Domain domain, String ipAddress, int loadSheddingModulus)
       throws CTPException, ResponseStatusException {
     verifyArgumentSupplied("domain", domain);
