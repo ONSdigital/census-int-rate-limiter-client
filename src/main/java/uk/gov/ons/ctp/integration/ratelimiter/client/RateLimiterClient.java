@@ -242,7 +242,7 @@ public class RateLimiterClient {
     return Integer.valueOf(ipAddress.substring(ipAddress.lastIndexOf('.') + 1));
   }
 
-  private boolean isValidIpAddress(String ipAddress) throws CTPException {
+  private boolean isValidIpAddress(String ipAddress) {
     boolean valid = true;
     if (StringUtils.isBlank(ipAddress)) {
       log.with("ipAddress", ipAddress)
