@@ -174,6 +174,8 @@ public class RateLimiterClient {
     verifyArgumentSupplied("domain", domain);
 
     if (!isValidIpAddress(ipAddress)) {
+      log.with("ipAddress", ipAddress)
+          .info("Webform rate limit not checked due to invalid IP address");
       return;
     }
 
@@ -215,6 +217,8 @@ public class RateLimiterClient {
     verifyLoadSheddingModulus(loadSheddingModulus);
 
     if (!isValidIpAddress(ipAddress)) {
+      log.with("ipAddress", ipAddress)
+          .info("EQ Launch rate limit not checked due to invalid IP address");
       return;
     }
     log.with("ipAddress", ipAddress)
