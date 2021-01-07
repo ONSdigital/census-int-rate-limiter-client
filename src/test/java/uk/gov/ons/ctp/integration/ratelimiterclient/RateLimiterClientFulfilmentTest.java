@@ -44,10 +44,9 @@ public class RateLimiterClientFulfilmentTest extends RateLimiterClientTestBase {
     CTPException exception =
         assertThrows(
             CTPException.class,
-            () -> {
-              rateLimiterClient.checkFulfilmentRateLimit(
-                  null, product, caseType, AN_IPv4_ADDRESS, uprn, "0171 3434");
-            });
+            () ->
+                rateLimiterClient.checkFulfilmentRateLimit(
+                    null, product, caseType, AN_IPv4_ADDRESS, uprn, "0171 3434"));
     assertTrue(exception.getMessage(), exception.getMessage().contains("'domain' cannot be null"));
     verifyEnvoyLimiterNotCalled();
   }

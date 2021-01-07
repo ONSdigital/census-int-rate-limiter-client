@@ -22,9 +22,7 @@ public class RateLimiterClientEqLaunchTest extends RateLimiterClientTestBase {
     CTPException exception =
         assertThrows(
             CTPException.class,
-            () -> {
-              rateLimiterClient.checkEqLaunchLimit(null, AN_IPv4_ADDRESS, 10);
-            });
+            () -> rateLimiterClient.checkEqLaunchLimit(null, AN_IPv4_ADDRESS, 10));
     assertTrue(exception.getMessage(), exception.getMessage().contains("'domain' cannot be null"));
     verifyEnvoyLimiterNotCalled();
   }
@@ -34,9 +32,7 @@ public class RateLimiterClientEqLaunchTest extends RateLimiterClientTestBase {
     CTPException exception =
         assertThrows(
             CTPException.class,
-            () -> {
-              rateLimiterClient.checkEqLaunchLimit(domain, AN_IPv4_ADDRESS, 0);
-            });
+            () -> rateLimiterClient.checkEqLaunchLimit(domain, AN_IPv4_ADDRESS, 0));
     assertTrue(
         exception.getMessage(),
         exception.getMessage().contains("'loadSheddingModulus' cannot be zero"));

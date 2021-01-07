@@ -23,9 +23,7 @@ public class RateLimiterClientWebformTest extends RateLimiterClientTestBase {
     CTPException exception =
         assertThrows(
             CTPException.class,
-            () -> {
-              rateLimiterClient.checkWebformRateLimit(null, AN_IPv4_ADDRESS);
-            });
+            () -> rateLimiterClient.checkWebformRateLimit(null, AN_IPv4_ADDRESS));
     assertTrue(exception.getMessage(), exception.getMessage().contains("'domain' cannot be null"));
   }
 
