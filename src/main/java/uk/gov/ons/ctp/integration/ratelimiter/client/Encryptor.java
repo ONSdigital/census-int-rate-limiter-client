@@ -27,9 +27,11 @@ public final class Encryptor {
   /** OpenSSL's magic initial bytes. */
   private static final String SALTED_STR = "Salted__";
 
+  private static final int GENERATED_SALT_LENGTH = 8;
+  private static final int FULL_SALT_LENGTH = GENERATED_SALT_LENGTH + SALTED_STR.length();
   private static final byte[] SALTED_MAGIC = SALTED_STR.getBytes(US_ASCII);
 
-  public static String aesEncrypt(String value, String password) {
+  public static String aesEncrypt(String password, String value) {
     try {
       return encrypt(password, value);
     } catch (Exception e) {
@@ -37,11 +39,11 @@ public final class Encryptor {
     }
   }
 
-  static String encrypt(String password, String clearText)
+  private static String encrypt(String password, String clearText)
       throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
           InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
 
-    final byte[] salt = (new SecureRandom()).generateSeed(8);
+    final byte[] salt = (new SecureRandom()).generateSeed(GENERATED_SALT_LENGTH);
     byte[] keyAndIv = makeKeyAndIv(password, salt);
     final Cipher cipher = createCipher(Cipher.ENCRYPT_MODE, keyAndIv);
     byte[] data = cipher.doFinal(clearText.getBytes(UTF_8));
@@ -52,18 +54,17 @@ public final class Encryptor {
   public static String decrypt(String password, String source)
       throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
           InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
-    final byte[] inBytes = Base64.getDecoder().decode(source);
-
-    final byte[] shouldBeMagic = Arrays.copyOfRange(inBytes, 0, SALTED_MAGIC.length);
-    if (!Arrays.equals(shouldBeMagic, SALTED_MAGIC)) {
+    if (!isValidEncryptedFormat(source)) {
       throw new IllegalArgumentException(
           "Initial bytes from input do not match OpenSSL SALTED_MAGIC salt value.");
     }
 
-    final byte[] salt = Arrays.copyOfRange(inBytes, SALTED_MAGIC.length, SALTED_MAGIC.length + 8);
+    final byte[] inBytes = Base64.getDecoder().decode(source);
+    final byte[] salt = Arrays.copyOfRange(inBytes, SALTED_MAGIC.length, FULL_SALT_LENGTH);
     byte[] keyAndIv = makeKeyAndIv(password, salt);
     final Cipher cipher = createCipher(Cipher.DECRYPT_MODE, keyAndIv);
-    final byte[] clear = cipher.doFinal(inBytes, 16, inBytes.length - 16);
+    final byte[] clear =
+        cipher.doFinal(inBytes, FULL_SALT_LENGTH, inBytes.length - FULL_SALT_LENGTH);
     return new String(clear, UTF_8);
   }
 
@@ -90,6 +91,12 @@ public final class Encryptor {
       keyAndIv = array_concat(keyAndIv, hash);
     }
     return keyAndIv;
+  }
+
+  public static boolean isValidEncryptedFormat(String source) {
+    final byte[] inBytes = Base64.getDecoder().decode(source);
+    final byte[] shouldBeMagic = Arrays.copyOfRange(inBytes, 0, SALTED_MAGIC.length);
+    return Arrays.equals(shouldBeMagic, SALTED_MAGIC);
   }
 
   private static byte[] array_concat(final byte[] a, final byte[] b) {

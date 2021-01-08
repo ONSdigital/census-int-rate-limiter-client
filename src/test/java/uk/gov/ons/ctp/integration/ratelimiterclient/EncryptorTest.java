@@ -1,22 +1,48 @@
 package uk.gov.ons.ctp.integration.ratelimiterclient;
 
+import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.Test;
 import uk.gov.ons.ctp.integration.ratelimiter.client.Encryptor;
 
 public class EncryptorTest {
+  //
+  // some samples generated from:
+  // echo -n "$VALUE" | openssl enc -aes-256-cbc -pass "pass:$PASSWORD" | base64
+  //
+  private static final String ENCRYPTED_1 = "U2FsdGVkX1/BLHViDnYcmmf+6W0JCcISt3SttPVP1lM=";
+  private static final String ENCRYPTED_2 = "U2FsdGVkX18PgyWlpU+4mKZoUDP0cp6mFOuALsZhO6Q=";
+  private static final String ENCRYPTED_3 = "U2FsdGVkX19GWj9AYD4rhNslbV8WMBrrLq2NHIb/oL0=";
 
-  @Test
-  public void dummy() {}
+  private void verifyRoundTripEncrypt(String password, String value) throws Exception {
+    String encrypted = Encryptor.aesEncrypt(password, value);
+    assertEquals(value, Encryptor.decrypt(password, encrypted));
+  }
 
   @Test
   public void shouldEncrypt() throws Exception {
-    String encrypted = Encryptor.aesEncrypt("123", "password");
-    System.out.println(encrypted);
-    String decrypted = Encryptor.decrypt("password", encrypted);
-    assertEquals("123", decrypted);
+    verifyRoundTripEncrypt("password", "123");
+    verifyRoundTripEncrypt("another-password", "0798 356 789");
+    verifyRoundTripEncrypt("yFk6_]&FBDy,eeYK", "0798 356 789");
   }
 
-  // WRITEME
+  @Test
+  public void shouldBeCompatibleFormat() throws Exception {
+    assertTrue(Encryptor.isValidEncryptedFormat(ENCRYPTED_1));
+    assertTrue(Encryptor.isValidEncryptedFormat(ENCRYPTED_2));
+    assertTrue(Encryptor.isValidEncryptedFormat(ENCRYPTED_3));
+  }
+
+  @Test
+  public void shouldDecrypt() throws Exception {
+    assertEquals("rob", Encryptor.decrypt("password", ENCRYPTED_1));
+    assertEquals("0765 345 987", Encryptor.decrypt("Resp0ndentH0me", ENCRYPTED_2));
+    assertEquals("02380263345", Encryptor.decrypt("crazy777", ENCRYPTED_3));
+  }
+
+  @Test(expected = Exception.class)
+  public void shouldRejectDecryptionWithWrongPassword() throws Exception {
+    Encryptor.decrypt("password8", ENCRYPTED_1);
+  }
 }
