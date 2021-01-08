@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>uk.gov.ons.ctp.integration.common</groupId>
   <artifactId>census-int-rate-limiter-client</artifactId>
-  <version>0.0.9-SNAPSHOT</version>
+  <version>0.0.10-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>CTP : Integration Rate Limiter Client</name>
@@ -75,6 +75,12 @@
     </dependency>
 
     <dependency>
+      <groupId>commons-validator</groupId>
+      <artifactId>commons-validator</artifactId>
+      <version>1.6</version>
+    </dependency>
+
+    <dependency>
       <groupId>uk.gov.ons.ctp.integration.common</groupId>
       <artifactId>framework</artifactId>
       <version>0.0.72</version>
@@ -83,13 +89,13 @@
     <dependency>
       <groupId>uk.gov.ons.ctp.integration.common</groupId>
       <artifactId>product-reference</artifactId>
-      <version>1.0.10</version>
+      <version>1.0.11</version>
     </dependency>
 
     <dependency>
       <groupId>uk.gov.ons.ctp.integration.common</groupId>
       <artifactId>test-framework</artifactId>
-      <version>0.0.11</version>
+      <version>0.0.17</version>
       <scope>test</scope>
     </dependency>
 

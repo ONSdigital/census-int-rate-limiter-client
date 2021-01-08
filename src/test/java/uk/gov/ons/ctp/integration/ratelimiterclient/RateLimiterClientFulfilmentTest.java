@@ -4,53 +4,24 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.mockito.stubbing.Answer;
-import org.springframework.cloud.client.circuitbreaker.CircuitBreaker;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
-import uk.gov.ons.ctp.common.FixtureHelper;
 import uk.gov.ons.ctp.common.domain.CaseType;
 import uk.gov.ons.ctp.common.domain.UniquePropertyReferenceNumber;
 import uk.gov.ons.ctp.common.error.CTPException;
-import uk.gov.ons.ctp.common.rest.RestClient;
 import uk.gov.ons.ctp.integration.common.product.model.Product;
 import uk.gov.ons.ctp.integration.common.product.model.Product.DeliveryChannel;
 import uk.gov.ons.ctp.integration.common.product.model.Product.ProductGroup;
-import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient;
-import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient.Domain;
-import uk.gov.ons.ctp.integration.ratelimiter.model.DescriptorEntry;
 import uk.gov.ons.ctp.integration.ratelimiter.model.LimitDescriptor;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitRequest;
-import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
 
 /** This class contains unit tests for limit testing fulfilment requests. */
 @RunWith(MockitoJUnitRunner.class)
-public class RateLimiterClientFulfilmentTest {
-
-  @Mock RestClient restClient;
-  @Mock private CircuitBreaker circuitBreaker;
-
-  @Mock private CallNotPermittedException circuitBreakerOpenException;
-
-  @InjectMocks
-  RateLimiterClient rateLimiterClient = new RateLimiterClient(restClient, circuitBreaker);
+public class RateLimiterClientFulfilmentTest extends RateLimiterClientTestBase {
 
   private Product product =
       new Product(
@@ -65,25 +36,19 @@ public class RateLimiterClientFulfilmentTest {
           null,
           null);
 
-  private Domain domain = RateLimiterClient.Domain.RH;
   private UniquePropertyReferenceNumber uprn = new UniquePropertyReferenceNumber("24234234");
   private CaseType caseType = CaseType.HH;
-
-  @Before
-  public void setUp() {
-    simulateCircuitBreaker();
-  }
 
   @Test
   public void checkFulfilmentRateLimit_nullDomain() {
     CTPException exception =
         assertThrows(
             CTPException.class,
-            () -> {
-              rateLimiterClient.checkFulfilmentRateLimit(
-                  null, product, caseType, "100.101.88.99", uprn, "0171 3434");
-            });
+            () ->
+                rateLimiterClient.checkFulfilmentRateLimit(
+                    null, product, caseType, AN_IPv4_ADDRESS, uprn, "0171 3434"));
     assertTrue(exception.getMessage(), exception.getMessage().contains("'domain' cannot be null"));
+    verifyEnvoyLimiterNotCalled();
   }
 
   @Test
@@ -107,27 +72,48 @@ public class RateLimiterClientFulfilmentTest {
   }
 
   @Test
+  public void shouldAcceptValidIpv4ClientIpAndMakeUseOfIt() throws Exception {
+    doCheckIpAddressUsed(AN_IPv4_ADDRESS, true);
+  }
+
+  @Test
+  public void shouldQuietlyAcceptNullClientIpButNotUseIt() throws Exception {
+    doCheckIpAddressUsed(null, false);
+  }
+
+  @Test
+  public void shouldQuietlyAcceptEmptyClientIpButNotUseIt() throws Exception {
+    doCheckIpAddressUsed("", false);
+  }
+
+  @Test
+  public void shouldQuietlyAcceptBadlyFormattedClientIpButNotUseIt() throws Exception {
+    doCheckIpAddressUsed("badlyformattedIpAddress", false);
+  }
+
+  @Test
+  public void shouldQuietlyAcceptIpV6ClientIpButNotUseIt() throws Exception {
+    doCheckIpAddressUsed("2001:DB8::21f:5bff:febf:ce22:8a2e", false);
+  }
+
+  @Test
   public void checkFulfilmentRateLimit_aboveThreshold() throws Exception {
     // Limit request is going to fail with exception. This needs to contain a string with the
     // limiters
     // too-many-requests response
-    RateLimitResponse tooManyRequestsDTO =
-        FixtureHelper.loadClassFixtures(RateLimitResponse[].class).get(0);
-    String tooManyRequestsString = new ObjectMapper().writeValueAsString(tooManyRequestsDTO);
-    ResponseStatusException failureException =
-        new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, tooManyRequestsString, null);
-    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class)))
-        .thenThrow(failureException);
+    ResponseStatusException failureException = overTheLimitException();
+    mockRateLimitException(failureException);
 
     // Confirm that limiter request fails with a 429 exception
     try {
       rateLimiterClient.checkFulfilmentRateLimit(
-          domain, product, caseType, "123.111.222.23", uprn, "0171 3434");
+          domain, product, caseType, AN_IPv4_ADDRESS, uprn, "0171 3434");
       fail();
     } catch (ResponseStatusException e) {
       assertEquals(failureException, e);
       assertEquals(HttpStatus.TOO_MANY_REQUESTS, e.getStatus());
     }
+    verifiedRequestSentToLimiter();
   }
 
   @Test
@@ -135,39 +121,30 @@ public class RateLimiterClientFulfilmentTest {
     // Limit request is going to fail with exception that simulates an unexpected error from the
     // limiter. ie, http
     // response status is neither an expected 200 or 429
-    RateLimitResponse repsonseDTO =
-        FixtureHelper.loadClassFixtures(RateLimitResponse[].class).get(0);
-    String tooManyRequestsString = new ObjectMapper().writeValueAsString(repsonseDTO);
-    ResponseStatusException failureException =
-        new ResponseStatusException(HttpStatus.BAD_REQUEST, tooManyRequestsString, null);
-    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class)))
-        .thenThrow(failureException);
+    mockRateLimitException(badRequestException());
 
     // Circuit breaker spots that this isn't a TOO_MANY_REQUESTS HttpStatus failure, so
     // we log an error and allow the limit check to pass. ie, no exception thrown
     rateLimiterClient.checkFulfilmentRateLimit(domain, product, caseType, null, uprn, null);
+    verifiedRequestSentToLimiter();
   }
 
   @Test
   public void checkFulfilmentRateLimit_corruptedLimiterJson() throws Exception {
     // This test simulates an internal error in which the call to the limiter has responded with a
     // 429 but the response JSon has somehow been corrupted
-    String corruptedJson = "aoeu<.p#$%^EOUAEOU3245";
-    ResponseStatusException failureException =
-        new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, corruptedJson, null);
-    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class)))
-        .thenThrow(failureException);
+    mockRateLimitException(corruptedJsonException());
 
     // Although the rest client call fails the circuit breaker allows the limit check to pass. ie,
     // no exception thrown
     rateLimiterClient.checkFulfilmentRateLimit(domain, product, caseType, null, uprn, null);
+    verifiedRequestSentToLimiter();
   }
 
   @Test
   public void checkFulfilmentRateLimit_worksWithCircuitBreakerOpen() throws Exception {
     // Simulate circuit breaker not calling rest client
-    Mockito.when(restClient.postResource(eq("/json"), any(), eq(RateLimitResponse.class)))
-        .thenThrow(circuitBreakerOpenException);
+    mockRateLimitException(circuitBreakerOpenException);
 
     // Limit check works without an exception
     rateLimiterClient.checkFulfilmentRateLimit(domain, product, caseType, null, uprn, null);
@@ -183,6 +160,7 @@ public class RateLimiterClientFulfilmentTest {
                   domain, null, caseType, null, uprn, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
+    verifyEnvoyLimiterNotCalled();
   }
 
   @Test
@@ -195,18 +173,7 @@ public class RateLimiterClientFulfilmentTest {
                   domain, product, null, null, uprn, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
-  }
-
-  @Test
-  public void checkFulfilmentRateLimit_blankIpAddress() {
-    CTPException exception =
-        assertThrows(
-            CTPException.class,
-            () -> {
-              rateLimiterClient.checkFulfilmentRateLimit(
-                  domain, product, caseType, " ", uprn, "0171 3434");
-            });
-    assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be blank"));
+    verifyEnvoyLimiterNotCalled();
   }
 
   @Test
@@ -219,6 +186,7 @@ public class RateLimiterClientFulfilmentTest {
                   domain, product, caseType, null, null, "0171 3434");
             });
     assertTrue(exception.getMessage(), exception.getMessage().contains("cannot be null"));
+    verifyEnvoyLimiterNotCalled();
   }
 
   @Test
@@ -239,14 +207,11 @@ public class RateLimiterClientFulfilmentTest {
     // the limit
 
     String telNo = useTelNo ? "0123 3434333" : null;
-    String ipAddress = useIpAddress ? "123.123.123.123" : null;
+    String ipAddress = useIpAddress ? AN_IPv4_ADDRESS : null;
     rateLimiterClient.checkFulfilmentRateLimit(domain, product, caseType, ipAddress, uprn, telNo);
 
     // Grab the request sent to the limiter
-    ArgumentCaptor<RateLimitRequest> limitRequestCaptor =
-        ArgumentCaptor.forClass(RateLimitRequest.class);
-    Mockito.verify(restClient).postResource(any(), limitRequestCaptor.capture(), any(), any());
-    RateLimitRequest request = limitRequestCaptor.getValue();
+    RateLimitRequest request = verifiedRequestSentToLimiter();
 
     // Verify that the limit request contains the correct number of descriptors
     int expectedNumDescriptors = 2;
@@ -268,6 +233,20 @@ public class RateLimiterClientFulfilmentTest {
     if (useIpAddress) {
       verifyDescriptor(request, i++, product, "ipAddress", ipAddress);
     }
+  }
+
+  private void doCheckIpAddressUsed(String ipAddress, boolean expectIpUsed) throws Exception {
+    rateLimiterClient.checkFulfilmentRateLimit(
+        domain, product, caseType, ipAddress, uprn, "0123 3434333");
+
+    RateLimitRequest request = verifiedRequestSentToLimiter();
+
+    int expectedNumDescriptors = 4;
+
+    if (expectIpUsed) {
+      verifyDescriptor(request, expectedNumDescriptors++, product, "ipAddress", ipAddress);
+    }
+    assertEquals(expectedNumDescriptors, request.getDescriptors().size());
   }
 
   private void verifyDescriptor(
@@ -296,37 +275,5 @@ public class RateLimiterClientFulfilmentTest {
     assertEquals(2, descriptor.getEntries().size());
     verifyEntry(descriptor, 0, "deliveryChannel", product.getDeliveryChannel().name());
     verifyEntry(descriptor, 1, finalKeyName, finalKeyValue);
-  }
-
-  private void verifyEntry(
-      LimitDescriptor descriptor, int index, String expectedKey, String expectedValue) {
-    DescriptorEntry entry = descriptor.getEntries().get(index);
-    assertEquals(expectedKey, entry.getKey());
-    assertEquals(expectedValue, entry.getValue());
-  }
-
-  private void simulateCircuitBreaker() {
-    doAnswer(
-            new Answer<Object>() {
-              @SuppressWarnings("unchecked")
-              @Override
-              public Object answer(InvocationOnMock invocation) throws Throwable {
-                Object[] args = invocation.getArguments();
-                Supplier<Object> runner = (Supplier<Object>) args[0];
-                Function<Throwable, Object> fallback = (Function<Throwable, Object>) args[1];
-
-                try {
-                  // execute the circuitBreaker.run first argument (the Supplier for the code you
-                  // want to run)
-                  return runner.get();
-                } catch (Throwable t) {
-                  // execute the circuitBreaker.run second argument (the fallback Function)
-                  fallback.apply(t);
-                }
-                return null;
-              }
-            })
-        .when(circuitBreaker)
-        .run(any(), any());
   }
 }
