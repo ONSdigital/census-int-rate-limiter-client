@@ -1,4 +1,4 @@
-package uk.gov.ons.ctp.integration.ratelimiterclient;
+package uk.gov.ons.ctp.integration.ratelimiter.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -23,7 +23,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.ons.ctp.common.FixtureHelper;
 import uk.gov.ons.ctp.common.rest.RestClient;
-import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient;
 import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient.Domain;
 import uk.gov.ons.ctp.integration.ratelimiter.model.DescriptorEntry;
 import uk.gov.ons.ctp.integration.ratelimiter.model.LimitDescriptor;
@@ -94,10 +93,13 @@ public abstract class RateLimiterClientTestBase {
     return FixtureHelper.loadPackageFixtures(RateLimitResponse[].class).get(0);
   }
 
-  ResponseStatusException overTheLimitException() throws Exception {
-    String tooManyRequestsString =
-        new ObjectMapper().writeValueAsString(exampleRateLimitResponse());
+  ResponseStatusException overTheLimitException(RateLimitResponse resp) throws Exception {
+    String tooManyRequestsString = new ObjectMapper().writeValueAsString(resp);
     return new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, tooManyRequestsString, null);
+  }
+
+  ResponseStatusException overTheLimitException() throws Exception {
+    return overTheLimitException(exampleRateLimitResponse());
   }
 
   ResponseStatusException badRequestException() {

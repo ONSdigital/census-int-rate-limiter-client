@@ -1,4 +1,4 @@
-package uk.gov.ons.ctp.integration.ratelimiter.client;
+package uk.gov.ons.ctp.integration.ratelimiter.util;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -31,6 +31,8 @@ public final class Encryptor {
   private static final int FULL_SALT_LENGTH = GENERATED_SALT_LENGTH + SALTED_STR.length();
   private static final byte[] SALTED_MAGIC = SALTED_STR.getBytes(US_ASCII);
 
+  private Encryptor() {}
+
   public static String aesEncrypt(String password, String value) {
     try {
       return encrypt(password, value);
@@ -51,7 +53,7 @@ public final class Encryptor {
     return Base64.getEncoder().encodeToString(data);
   }
 
-  public static String decrypt(String password, String source)
+  static String decrypt(String password, String source)
       throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
           InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
     if (!isValidEncryptedFormat(source)) {
@@ -93,7 +95,7 @@ public final class Encryptor {
     return keyAndIv;
   }
 
-  public static boolean isValidEncryptedFormat(String source) {
+  static boolean isValidEncryptedFormat(String source) {
     final byte[] inBytes = Base64.getDecoder().decode(source);
     final byte[] shouldBeMagic = Arrays.copyOfRange(inBytes, 0, SALTED_MAGIC.length);
     return Arrays.equals(shouldBeMagic, SALTED_MAGIC);

@@ -1,10 +1,9 @@
-package uk.gov.ons.ctp.integration.ratelimiterclient;
+package uk.gov.ons.ctp.integration.ratelimiter.util;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.Test;
-import uk.gov.ons.ctp.integration.ratelimiter.client.Encryptor;
 
 public class EncryptorTest {
   //
@@ -44,5 +43,15 @@ public class EncryptorTest {
   @Test(expected = Exception.class)
   public void shouldRejectDecryptionWithWrongPassword() throws Exception {
     Encryptor.decrypt("password8", ENCRYPTED_1);
+  }
+
+  @Test(expected = Exception.class)
+  public void shouldRejectDecryptionWithBadSource() throws Exception {
+    Encryptor.decrypt("password", "BadEncryptionString");
+  }
+
+  @Test(expected = RuntimeException.class)
+  public void shouldRejectEncryptionWithNullPassword() throws Exception {
+    Encryptor.aesEncrypt(null, "123");
   }
 }
