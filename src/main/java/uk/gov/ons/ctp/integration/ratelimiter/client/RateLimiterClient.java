@@ -72,12 +72,27 @@ public class RateLimiterClient {
 
   private RestClient envoyLimiterRestClient;
   private CircuitBreaker circuitBreaker;
+  private String encryptionPassword;
   private ObjectMapper objectMapper = new ObjectMapper();
 
-  public RateLimiterClient(RestClient envoyLimiterRestClient, CircuitBreaker circuitBreaker) {
+  /**
+   * Constructor.
+   *
+   * @param envoyLimiterRestClient rest client
+   * @param circuitBreaker circuit breaker
+   * @param encryptionPassword encryption password (for encrypting the logging of telephone number.
+   *     This cannot be null or empty.
+   */
+  public RateLimiterClient(
+      RestClient envoyLimiterRestClient, CircuitBreaker circuitBreaker, String encryptionPassword) {
     super();
     this.envoyLimiterRestClient = envoyLimiterRestClient;
     this.circuitBreaker = circuitBreaker;
+    this.encryptionPassword = encryptionPassword;
+
+    if (StringUtils.isBlank(encryptionPassword)) {
+      throw new IllegalArgumentException("Encryption password must be configured");
+    }
 
     this.objectMapper = new ObjectMapper();
     this.objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
@@ -132,7 +147,7 @@ public class RateLimiterClient {
         .with("caseType", caseType.name())
         .with("ipAddress", ipAddress)
         .with("uprn", uprn.getValue())
-        .with("telNo", redactTelephoneNumber(telNo))
+        .with("telNo", telNo == null ? null : Encryptor.aesEncrypt(encryptionPassword, telNo))
         .info("Fulfilment rate limit. Going to call Rate Limiter Service");
 
     // Make it easy to access limiter parameters by adding to a hashmap

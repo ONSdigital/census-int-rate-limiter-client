@@ -16,6 +16,7 @@ import uk.gov.ons.ctp.common.error.CTPException;
 import uk.gov.ons.ctp.integration.common.product.model.Product;
 import uk.gov.ons.ctp.integration.common.product.model.Product.DeliveryChannel;
 import uk.gov.ons.ctp.integration.common.product.model.Product.ProductGroup;
+import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient;
 import uk.gov.ons.ctp.integration.ratelimiter.model.LimitDescriptor;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitRequest;
 
@@ -38,6 +39,16 @@ public class RateLimiterClientFulfilmentTest extends RateLimiterClientTestBase {
 
   private UniquePropertyReferenceNumber uprn = new UniquePropertyReferenceNumber("24234234");
   private CaseType caseType = CaseType.HH;
+
+  @Test(expected = IllegalArgumentException.class)
+  public void shouldRejectNullEncryptionPassword() {
+    new RateLimiterClient(restClient, circuitBreaker, null);
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void shouldRejectBlankEncryptionPassword() {
+    new RateLimiterClient(restClient, circuitBreaker, "");
+  }
 
   @Test
   public void checkFulfilmentRateLimit_nullDomain() {

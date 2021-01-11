@@ -15,7 +15,6 @@ import java.util.function.Supplier;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -33,12 +32,12 @@ import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
 
 public abstract class RateLimiterClientTestBase {
   static final String AN_IPv4_ADDRESS = "123.111.222.23";
+  static final String ENCRYPT_PASSWORD = "password";
 
   @Mock RestClient restClient;
   @Mock CircuitBreaker circuitBreaker;
   @Mock CallNotPermittedException circuitBreakerOpenException;
-
-  @InjectMocks RateLimiterClient rateLimiterClient;
+  RateLimiterClient rateLimiterClient;
 
   Domain domain = RateLimiterClient.Domain.RH;
 
@@ -69,6 +68,7 @@ public abstract class RateLimiterClientTestBase {
 
   @Before
   public void setUp() {
+    rateLimiterClient = new RateLimiterClient(restClient, circuitBreaker, ENCRYPT_PASSWORD);
     simulateCircuitBreaker();
   }
 

@@ -34,6 +34,7 @@ import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient;
  * the test). For running on a development machine set this to 'localhost'.
  */
 public class RateLimiterClient_IT {
+  private static final String PASSWORD = "password";
   private String limiterHost;
 
   private RestClient restClient;
@@ -85,7 +86,7 @@ public class RateLimiterClient_IT {
             }
           };
 
-      this.client = new RateLimiterClient(this.restClient, circuitBreaker);
+      this.client = new RateLimiterClient(this.restClient, circuitBreaker, PASSWORD);
     }
   }
 
