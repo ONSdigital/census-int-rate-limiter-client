@@ -26,6 +26,7 @@ import uk.gov.ons.ctp.integration.ratelimiter.model.LimitDescriptor;
 import uk.gov.ons.ctp.integration.ratelimiter.model.LimitStatus;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitRequest;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
+import uk.gov.ons.ctp.integration.ratelimiter.util.Encryptor;
 
 public class RateLimiterClient {
   private static final Logger log = LoggerFactory.getLogger(RateLimiterClient.class);
@@ -72,12 +73,27 @@ public class RateLimiterClient {
 
   private RestClient envoyLimiterRestClient;
   private CircuitBreaker circuitBreaker;
+  private String encryptionPassword;
   private ObjectMapper objectMapper = new ObjectMapper();
 
-  public RateLimiterClient(RestClient envoyLimiterRestClient, CircuitBreaker circuitBreaker) {
+  /**
+   * Constructor.
+   *
+   * @param envoyLimiterRestClient rest client
+   * @param circuitBreaker circuit breaker
+   * @param encryptionPassword encryption password (for encrypting the logging of telephone number.
+   *     This cannot be null or empty.
+   */
+  public RateLimiterClient(
+      RestClient envoyLimiterRestClient, CircuitBreaker circuitBreaker, String encryptionPassword) {
     super();
     this.envoyLimiterRestClient = envoyLimiterRestClient;
     this.circuitBreaker = circuitBreaker;
+    this.encryptionPassword = encryptionPassword;
+
+    if (StringUtils.isBlank(encryptionPassword)) {
+      throw new IllegalArgumentException("Encryption password must be configured");
+    }
 
     this.objectMapper = new ObjectMapper();
     this.objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
@@ -132,7 +148,7 @@ public class RateLimiterClient {
         .with("caseType", caseType.name())
         .with("ipAddress", ipAddress)
         .with("uprn", uprn.getValue())
-        .with("telNo", redactTelephoneNumber(telNo))
+        .with("encrypted-telNo", encrypt(telNo))
         .info("Fulfilment rate limit. Going to call Rate Limiter Service");
 
     // Make it easy to access limiter parameters by adding to a hashmap
@@ -388,7 +404,7 @@ public class RateLimiterClient {
         // An expected failure scenario. Record the breach and make sure caller
         // knows by re-throwing the exception
         String breachDescription = describeLimitBreach(request, limiterException);
-        log.info(breachDescription.toString());
+        log.info(breachDescription);
         throw limiterException;
       } else {
         // Something unexpected went wrong
@@ -446,7 +462,8 @@ public class RateLimiterClient {
       String descriptorKey = descriptorEntry.getKey();
       String descriptorValue = descriptorEntry.getValue();
       if (descriptorKey.equals(DESC_TEL_NO)) {
-        descriptorValue = redactTelephoneNumber(descriptorValue);
+        descriptorKey = "encrypted-" + descriptorKey;
+        descriptorValue = encrypt(descriptorValue);
       }
 
       desc.append(descriptorKey + "=" + descriptorValue);
@@ -470,16 +487,7 @@ public class RateLimiterClient {
     return response;
   }
 
-  private String redactTelephoneNumber(String telNo) {
-    if (telNo == null) {
-      return "null";
-    }
-
-    StringBuilder redactedTelephoneNumber = new StringBuilder();
-
-    redactedTelephoneNumber.append("xxxx");
-    redactedTelephoneNumber.append(telNo.substring(telNo.length() - 2));
-
-    return redactedTelephoneNumber.toString();
+  private String encrypt(String telNo) {
+    return telNo == null ? null : Encryptor.aesEncrypt(encryptionPassword, telNo);
   }
 }

@@ -1,0 +1,47 @@
+[
+{
+  "overallCode": "429",
+  "statuses": [
+    {
+      "code": "OVER_LIMIT",
+      "currentLimit": {
+        "requestsPerUnit": 100,
+        "unit": "HOUR"
+      },
+      "limitRemaining": 999
+    },
+    {
+      "code": "OVER_LIMIT",
+      "currentLimit": {
+        "requestsPerUnit": 200,
+        "unit": "HOUR"
+      },
+      "limitRemaining": 999
+    },
+    {
+      "code": "OVER_LIMIT",
+      "currentLimit": {
+        "requestsPerUnit": 200,
+        "unit": "HOUR"
+      },
+      "limitRemaining": 999
+    },
+    {
+      "code": "OK",
+      "currentLimit": {
+        "requestsPerUnit": 200,
+        "unit": "HOUR"
+      },
+      "limitRemaining": 999
+    },
+    {
+      "code": "OK",
+      "currentLimit": {
+        "requestsPerUnit": 200,
+        "unit": "HOUR"
+      },
+      "limitRemaining": 999
+    }
+  ]
+}
+]

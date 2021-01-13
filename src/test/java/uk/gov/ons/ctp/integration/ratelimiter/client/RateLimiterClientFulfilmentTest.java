@@ -1,4 +1,4 @@
-package uk.gov.ons.ctp.integration.ratelimiterclient;
+package uk.gov.ons.ctp.integration.ratelimiter.client;
 
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -10,6 +10,7 @@ import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import uk.gov.ons.ctp.common.FixtureHelper;
 import uk.gov.ons.ctp.common.domain.CaseType;
 import uk.gov.ons.ctp.common.domain.UniquePropertyReferenceNumber;
 import uk.gov.ons.ctp.common.error.CTPException;
@@ -18,6 +19,7 @@ import uk.gov.ons.ctp.integration.common.product.model.Product.DeliveryChannel;
 import uk.gov.ons.ctp.integration.common.product.model.Product.ProductGroup;
 import uk.gov.ons.ctp.integration.ratelimiter.model.LimitDescriptor;
 import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitRequest;
+import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
 
 /** This class contains unit tests for limit testing fulfilment requests. */
 @RunWith(MockitoJUnitRunner.class)
@@ -38,6 +40,16 @@ public class RateLimiterClientFulfilmentTest extends RateLimiterClientTestBase {
 
   private UniquePropertyReferenceNumber uprn = new UniquePropertyReferenceNumber("24234234");
   private CaseType caseType = CaseType.HH;
+
+  @Test(expected = IllegalArgumentException.class)
+  public void shouldRejectNullEncryptionPassword() {
+    new RateLimiterClient(restClient, circuitBreaker, null);
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void shouldRejectBlankEncryptionPassword() {
+    new RateLimiterClient(restClient, circuitBreaker, "");
+  }
 
   @Test
   public void checkFulfilmentRateLimit_nullDomain() {
@@ -101,7 +113,8 @@ public class RateLimiterClientFulfilmentTest extends RateLimiterClientTestBase {
     // Limit request is going to fail with exception. This needs to contain a string with the
     // limiters
     // too-many-requests response
-    ResponseStatusException failureException = overTheLimitException();
+    RateLimitResponse resp = FixtureHelper.loadClassFixtures(RateLimitResponse[].class).get(0);
+    ResponseStatusException failureException = overTheLimitException(resp);
     mockRateLimitException(failureException);
 
     // Confirm that limiter request fails with a 429 exception

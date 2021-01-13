@@ -1,4 +1,4 @@
-package uk.gov.ons.ctp.integration.ratelimiterclient;
+package uk.gov.ons.ctp.integration.ratelimiter.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -15,7 +15,6 @@ import java.util.function.Supplier;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -24,7 +23,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.ons.ctp.common.FixtureHelper;
 import uk.gov.ons.ctp.common.rest.RestClient;
-import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient;
 import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient.Domain;
 import uk.gov.ons.ctp.integration.ratelimiter.model.DescriptorEntry;
 import uk.gov.ons.ctp.integration.ratelimiter.model.LimitDescriptor;
@@ -33,12 +31,12 @@ import uk.gov.ons.ctp.integration.ratelimiter.model.RateLimitResponse;
 
 public abstract class RateLimiterClientTestBase {
   static final String AN_IPv4_ADDRESS = "123.111.222.23";
+  static final String ENCRYPT_PASSWORD = "password";
 
   @Mock RestClient restClient;
   @Mock CircuitBreaker circuitBreaker;
   @Mock CallNotPermittedException circuitBreakerOpenException;
-
-  @InjectMocks RateLimiterClient rateLimiterClient;
+  RateLimiterClient rateLimiterClient;
 
   Domain domain = RateLimiterClient.Domain.RH;
 
@@ -69,6 +67,7 @@ public abstract class RateLimiterClientTestBase {
 
   @Before
   public void setUp() {
+    rateLimiterClient = new RateLimiterClient(restClient, circuitBreaker, ENCRYPT_PASSWORD);
     simulateCircuitBreaker();
   }
 
@@ -94,10 +93,13 @@ public abstract class RateLimiterClientTestBase {
     return FixtureHelper.loadPackageFixtures(RateLimitResponse[].class).get(0);
   }
 
-  ResponseStatusException overTheLimitException() throws Exception {
-    String tooManyRequestsString =
-        new ObjectMapper().writeValueAsString(exampleRateLimitResponse());
+  ResponseStatusException overTheLimitException(RateLimitResponse resp) throws Exception {
+    String tooManyRequestsString = new ObjectMapper().writeValueAsString(resp);
     return new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, tooManyRequestsString, null);
+  }
+
+  ResponseStatusException overTheLimitException() throws Exception {
+    return overTheLimitException(exampleRateLimitResponse());
   }
 
   ResponseStatusException badRequestException() {

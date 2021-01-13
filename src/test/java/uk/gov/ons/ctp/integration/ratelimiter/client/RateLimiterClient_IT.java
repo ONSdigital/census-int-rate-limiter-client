@@ -1,4 +1,4 @@
-package uk.gov.ons.ctp.integration.ratelimiterclient;
+package uk.gov.ons.ctp.integration.ratelimiter.client;
 
 import static org.junit.Assert.assertEquals;
 
@@ -24,7 +24,6 @@ import uk.gov.ons.ctp.common.rest.RestClientConfig;
 import uk.gov.ons.ctp.integration.common.product.model.Product;
 import uk.gov.ons.ctp.integration.common.product.model.Product.DeliveryChannel;
 import uk.gov.ons.ctp.integration.common.product.model.Product.ProductGroup;
-import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient;
 
 /**
  * This is a program for manually testing the client against an real/fake limiter.
@@ -34,6 +33,7 @@ import uk.gov.ons.ctp.integration.ratelimiter.client.RateLimiterClient;
  * the test). For running on a development machine set this to 'localhost'.
  */
 public class RateLimiterClient_IT {
+  private static final String PASSWORD = "password";
   private String limiterHost;
 
   private RestClient restClient;
@@ -85,7 +85,7 @@ public class RateLimiterClient_IT {
             }
           };
 
-      this.client = new RateLimiterClient(this.restClient, circuitBreaker);
+      this.client = new RateLimiterClient(this.restClient, circuitBreaker, PASSWORD);
     }
   }
 
