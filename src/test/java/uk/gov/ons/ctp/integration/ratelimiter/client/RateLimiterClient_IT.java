@@ -43,7 +43,7 @@ public class RateLimiterClient_IT {
   private ObjectMapper objectMapper;
 
   @Before
-  public void setup() {
+  public void setup() throws CTPException {
 
     limiterHost = System.getenv("LIMITER_HOST");
 
@@ -64,7 +64,25 @@ public class RateLimiterClient_IT {
       objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
 
       // Create RestClient to call limiter
-      RestClientConfig restClientConfig = new RestClientConfig("http", limiterHost, "8181", "", "");
+      int connectionManagerDefaultMaxPerRoute = 20;
+      int connectionManagerMaxTotal = 50;
+
+      int connectTimeoutMillis = 0;
+      int connectionRequestTimeoutMillis = 0;
+      int socketTimeoutMillis = 0;
+
+      RestClientConfig restClientConfig =
+          new RestClientConfig(
+              "http",
+              limiterHost,
+              "8181",
+              "",
+              "",
+              connectionManagerDefaultMaxPerRoute,
+              connectionManagerMaxTotal,
+              connectTimeoutMillis,
+              connectionRequestTimeoutMillis,
+              socketTimeoutMillis);
       Map<HttpStatus, HttpStatus> httpErrorMapping = new HashMap<>();
       httpErrorMapping.put(HttpStatus.TOO_MANY_REQUESTS, HttpStatus.TOO_MANY_REQUESTS);
       this.restClient =
